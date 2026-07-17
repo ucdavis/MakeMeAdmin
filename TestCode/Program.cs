@@ -21,6 +21,8 @@
 namespace SinclairCC.MakeMeAdmin
 {
     using System;
+    using System.Security;
+    using System.Security.Principal;
 
     /// <summary>
     /// This class defines the main entry point for the application.
@@ -636,8 +638,13 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
-        internal static void Main()
+        internal static int Main(string[] args)
         {
+            if ((args != null) && (Array.IndexOf(args, "--authorization-regression") >= 0))
+            {
+                return RunAuthorizationRegressionTests();
+            }
+
             Console.WriteLine("Main() starting at {0}.", DateTime.Now);
 
 #if DEBUG
@@ -645,6 +652,134 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
             Console.Write("Press <ENTER> to close this program.");
             Console.ReadLine();
 #endif
+            return 0;
+        }
+
+        /// <summary>
+        /// Exercises the same authorization guard used by the privileged service operation
+        /// without modifying policy or local group membership.
+        /// </summary>
+        private static int RunAuthorizationRegressionTests()
+        {
+            int failures = 0;
+            AdminGroupManipulator adminGroupManipulator = new AdminGroupManipulator();
+
+            failures += ExpectAuthorization(adminGroupManipulator,
+                                             "null caller is denied",
+                                             null,
+                                             false,
+                                             null,
+                                             null,
+                                             null,
+                                             null,
+                                             false);
+
+            using (WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent())
+            {
+                if ((currentIdentity == null) || (currentIdentity.User == null))
+                {
+                    Console.Error.WriteLine("FAIL: current Windows identity is unavailable.");
+                    return 1;
+                }
+
+                string[] currentUser = new string[] { currentIdentity.User.Value };
+                string[] noUsers = new string[0];
+
+                failures += ExpectAuthorization(adminGroupManipulator,
+                                                 "null local allow list permits the current caller",
+                                                 currentIdentity,
+                                                 false,
+                                                 null,
+                                                 null,
+                                                 null,
+                                                 null,
+                                                 true);
+                failures += ExpectAuthorization(adminGroupManipulator,
+                                                 "empty local allow list denies the current caller",
+                                                 currentIdentity,
+                                                 false,
+                                                 noUsers,
+                                                 null,
+                                                 null,
+                                                 null,
+                                                 false);
+                failures += ExpectAuthorization(adminGroupManipulator,
+                                                 "local deny list takes precedence",
+                                                 currentIdentity,
+                                                 false,
+                                                 currentUser,
+                                                 currentUser,
+                                                 null,
+                                                 null,
+                                                 false);
+                failures += ExpectAuthorization(adminGroupManipulator,
+                                                 "remote request must pass the remote allow list",
+                                                 currentIdentity,
+                                                 true,
+                                                 currentUser,
+                                                 null,
+                                                 noUsers,
+                                                 null,
+                                                 false);
+                failures += ExpectAuthorization(adminGroupManipulator,
+                                                 "remote request passes both applicable allow lists",
+                                                 currentIdentity,
+                                                 true,
+                                                 currentUser,
+                                                 null,
+                                                 currentUser,
+                                                 null,
+                                                 true);
+            }
+
+            Console.WriteLine(failures == 0 ? "Authorization regression tests passed." : string.Format("Authorization regression tests failed: {0}.", failures));
+            return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// Verifies whether the service authorization guard accepts or rejects a caller.
+        /// </summary>
+        private static int ExpectAuthorization(AdminGroupManipulator adminGroupManipulator,
+                                               string testName,
+                                               WindowsIdentity userIdentity,
+                                               bool remoteRequest,
+                                               string[] localAllowedEntities,
+                                               string[] localDeniedEntities,
+                                               string[] remoteAllowedEntities,
+                                               string[] remoteDeniedEntities,
+                                               bool shouldAuthorize)
+        {
+            try
+            {
+                adminGroupManipulator.DemandCallerIsAuthorized(userIdentity,
+                                                               remoteRequest,
+                                                               localAllowedEntities,
+                                                               localDeniedEntities,
+                                                               remoteAllowedEntities,
+                                                               remoteDeniedEntities);
+
+                if (!shouldAuthorize)
+                {
+                    Console.Error.WriteLine("FAIL: {0}.", testName);
+                    return 1;
+                }
+            }
+            catch (SecurityException)
+            {
+                if (shouldAuthorize)
+                {
+                    Console.Error.WriteLine("FAIL: {0}.", testName);
+                    return 1;
+                }
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine("FAIL: {0}. Unexpected {1}.", testName, exception.GetType().Name);
+                return 1;
+            }
+
+            Console.WriteLine("PASS: {0}.", testName);
+            return 0;
         }
 
     }

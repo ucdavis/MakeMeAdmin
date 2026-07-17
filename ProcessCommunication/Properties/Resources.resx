@@ -123,6 +123,15 @@
   <data name="AddingUserReturnedError" xml:space="preserve">
     <value>Adding user {0} ({1}) to the Administrators group returned error code {2}.</value>
   </data>
+  <data name="AuthorizationDenied" xml:space="preserve">
+    <value>Administrator-rights request denied for {0} ({1}).</value>
+  </data>
+  <data name="AuthorizationGranted" xml:space="preserve">
+    <value>Administrator-rights request authorized for {0} ({1}).</value>
+  </data>
+  <data name="CallerNotAuthorized" xml:space="preserve">
+    <value>The caller is not authorized to request administrator rights.</value>
+  </data>
   <data name="Exception" xml:space="preserve">
     <value>Exception</value>
   </data>

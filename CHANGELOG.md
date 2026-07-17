@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 https://github.com/pseymour/MakeMeAdmin/commits/master
 
 
+## [Unreleased]
+
+### Security
+
+- Enforced local and remote allow/deny policies at the privileged service boundary before administrator rights are granted.
+
+
 ## [2.4.1] - 2025-11-13
 
 ### Added
