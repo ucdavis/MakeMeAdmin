@@ -110,9 +110,6 @@ namespace SinclairCC.MakeMeAdmin
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool CloseHandle(IntPtr handle);
 
-        [DllImport("kernel32.dll", EntryPoint = "RtlSecureZeroMemory")]
-        private static extern IntPtr SecureZeroMemory(IntPtr destination, UIntPtr length);
-
         /// <summary>
         /// Displays a conventional username/password dialog that does not enumerate
         /// Windows Hello credential-provider tiles.
@@ -327,12 +324,39 @@ namespace SinclairCC.MakeMeAdmin
                 return;
             }
 
-            if (bufferSize > 0)
+            try
             {
-                SecureZeroMemory(buffer, new UIntPtr((ulong)bufferSize));
+                if (bufferSize > 0)
+                {
+                    ZeroBuffer(buffer, checked((int)bufferSize));
+                }
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(buffer);
+            }
+        }
+
+        /// <summary>
+        /// Overwrites an unmanaged buffer without depending on an operating-system
+        /// entry point that may not be exported on every supported Windows build.
+        /// </summary>
+        internal static void ZeroBuffer(IntPtr buffer, int bufferSize)
+        {
+            if (buffer == IntPtr.Zero)
+            {
+                throw new ArgumentNullException(nameof(buffer));
             }
 
-            Marshal.FreeCoTaskMem(buffer);
+            if (bufferSize < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(bufferSize));
+            }
+
+            for (int index = 0; index < bufferSize; index++)
+            {
+                Marshal.WriteByte(buffer, index, 0);
+            }
         }
 
         private static void ClearStringBuilder(StringBuilder value)

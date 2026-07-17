@@ -14,6 +14,7 @@ https://github.com/pseymour/MakeMeAdmin/commits/master
 
 - Enforced local and remote allow/deny policies at the privileged service boundary before administrator rights are granted.
 - Changed required reauthentication to use a password-only credential prompt, validate the resulting token SID against the current user, and reliably clear credential buffers.
+- Removed a credential-buffer cleanup dependency on a Windows entry point that is not exported on every supported system.
 
 
 ## [2.4.1] - 2025-11-13

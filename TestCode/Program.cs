@@ -24,6 +24,7 @@ namespace SinclairCC.MakeMeAdmin
 {
     using System;
     using System.Collections.Generic;
+    using System.Runtime.InteropServices;
     using System.Security;
     using System.Security.Principal;
     using CredentialNativeMethods = LocalUI::SinclairCC.MakeMeAdmin.CredentialNativeMethods;
@@ -805,6 +806,7 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
 
             failures += ExpectCondition("password prompt uses CREDUIWIN_GENERIC only",
                                         CredentialNativeMethods.PasswordPromptFlags == 0x1);
+            failures += TestUnmanagedBufferClearing();
 
             using (WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent())
             {
@@ -951,6 +953,36 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
             password.AppendChar('t');
             password.MakeReadOnly();
             return new PasswordCredentials("test-user", "test-domain", password);
+        }
+
+        private static int TestUnmanagedBufferClearing()
+        {
+            const int BufferSize = 32;
+            IntPtr buffer = Marshal.AllocCoTaskMem(BufferSize);
+
+            try
+            {
+                for (int index = 0; index < BufferSize; index++)
+                {
+                    Marshal.WriteByte(buffer, index, 0x5a);
+                }
+
+                CredentialNativeMethods.ZeroBuffer(buffer, BufferSize);
+
+                for (int index = 0; index < BufferSize; index++)
+                {
+                    if (Marshal.ReadByte(buffer, index) != 0)
+                    {
+                        return ExpectCondition("unmanaged credential buffer is cleared without a native entry point", false);
+                    }
+                }
+
+                return ExpectCondition("unmanaged credential buffer is cleared without a native entry point", true);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(buffer);
+            }
         }
 
         private static int ExpectCondition(string testName, bool condition)
