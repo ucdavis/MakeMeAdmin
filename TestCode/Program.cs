@@ -18,11 +18,19 @@
 // along with Make Me Admin. If not, see <http://www.gnu.org/licenses/>.
 //
 
+extern alias LocalUI;
+
 namespace SinclairCC.MakeMeAdmin
 {
     using System;
+    using System.Collections.Generic;
     using System.Security;
     using System.Security.Principal;
+    using CredentialNativeMethods = LocalUI::SinclairCC.MakeMeAdmin.CredentialNativeMethods;
+    using PasswordAuthenticator = LocalUI::SinclairCC.MakeMeAdmin.PasswordAuthenticator;
+    using PasswordCredentials = LocalUI::SinclairCC.MakeMeAdmin.PasswordCredentials;
+    using PasswordPromptResult = LocalUI::SinclairCC.MakeMeAdmin.PasswordPromptResult;
+    using PasswordValidationResult = LocalUI::SinclairCC.MakeMeAdmin.PasswordValidationResult;
 
     /// <summary>
     /// This class defines the main entry point for the application.
@@ -645,6 +653,11 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
                 return RunAuthorizationRegressionTests();
             }
 
+            if ((args != null) && (Array.IndexOf(args, "--password-regression") >= 0))
+            {
+                return RunPasswordRegressionTests();
+            }
+
             Console.WriteLine("Main() starting at {0}.", DateTime.Now);
 
 #if DEBUG
@@ -775,6 +788,176 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
             catch (Exception exception)
             {
                 Console.Error.WriteLine("FAIL: {0}. Unexpected {1}.", testName, exception.GetType().Name);
+                return 1;
+            }
+
+            Console.WriteLine("PASS: {0}.", testName);
+            return 0;
+        }
+
+        /// <summary>
+        /// Exercises password-authentication decisions without displaying a credential
+        /// prompt or validating a real password.
+        /// </summary>
+        private static int RunPasswordRegressionTests()
+        {
+            int failures = 0;
+
+            failures += ExpectCondition("password prompt uses CREDUIWIN_GENERIC only",
+                                        CredentialNativeMethods.PasswordPromptFlags == 0x1);
+
+            using (WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent())
+            {
+                if ((currentIdentity == null) || (currentIdentity.User == null))
+                {
+                    Console.Error.WriteLine("FAIL: current Windows identity is unavailable.");
+                    return 1;
+                }
+
+                SecurityIdentifier differentSid = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
+                failures += ExpectCondition("matching token SID is accepted",
+                                            CredentialNativeMethods.IdentityMatches(currentIdentity.User, currentIdentity.User));
+                failures += ExpectCondition("different token SID is rejected",
+                                            !CredentialNativeMethods.IdentityMatches(differentSid, currentIdentity.User));
+
+                PasswordCredentials successfulCredentials = CreateTestCredentials();
+                SecurityIdentifier observedExpectedSid = null;
+                PasswordAuthenticator successfulAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) => PasswordPromptResult.FromCredentials(successfulCredentials),
+                    (credentials, expectedSid) =>
+                    {
+                        observedExpectedSid = expectedSid;
+                        return PasswordValidationResult.Succeeded();
+                    });
+
+                bool successfulResult = successfulAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity);
+                failures += ExpectCondition("correct password result succeeds for the current SID",
+                                            successfulResult &&
+                                            currentIdentity.User.Equals(observedExpectedSid) &&
+                                            successfulCredentials.IsDisposed);
+
+                PasswordCredentials firstAttemptCredentials = CreateTestCredentials();
+                PasswordCredentials secondAttemptCredentials = CreateTestCredentials();
+                Queue<PasswordCredentials> passwordAttempts = new Queue<PasswordCredentials>();
+                passwordAttempts.Enqueue(firstAttemptCredentials);
+                passwordAttempts.Enqueue(secondAttemptCredentials);
+                List<int> promptErrors = new List<int>();
+                int validationCount = 0;
+                PasswordAuthenticator retryAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) =>
+                    {
+                        promptErrors.Add(error);
+                        return PasswordPromptResult.FromCredentials(passwordAttempts.Dequeue());
+                    },
+                    (credentials, expectedSid) =>
+                    {
+                        validationCount++;
+                        return validationCount == 1
+                            ? PasswordValidationResult.InvalidCredentials(1326)
+                            : PasswordValidationResult.Succeeded();
+                    });
+
+                bool retryResult = retryAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity);
+                failures += ExpectCondition("incorrect password is reported before a successful retry",
+                                            retryResult &&
+                                            promptErrors.Count == 2 &&
+                                            promptErrors[0] == 0 &&
+                                            promptErrors[1] == 1326 &&
+                                            firstAttemptCredentials.IsDisposed &&
+                                            secondAttemptCredentials.IsDisposed);
+
+                bool validatorCalledAfterCancellation = false;
+                PasswordAuthenticator canceledAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) => PasswordPromptResult.Canceled(),
+                    (credentials, expectedSid) =>
+                    {
+                        validatorCalledAfterCancellation = true;
+                        return PasswordValidationResult.Succeeded();
+                    });
+
+                failures += ExpectCondition("cancellation fails closed without validating",
+                                            !canceledAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity) &&
+                                            !validatorCalledAfterCancellation);
+
+                PasswordCredentials differentUserCredentials = CreateTestCredentials();
+                int differentUserPromptCount = 0;
+                int differentUserRetryError = 0;
+                PasswordAuthenticator differentUserAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) =>
+                    {
+                        differentUserPromptCount++;
+                        if (differentUserPromptCount == 1)
+                        {
+                            return PasswordPromptResult.FromCredentials(differentUserCredentials);
+                        }
+
+                        differentUserRetryError = error;
+                        return PasswordPromptResult.Canceled();
+                    },
+                    (credentials, expectedSid) => PasswordValidationResult.DifferentUser());
+
+                failures += ExpectCondition("credentials for another SID are rejected",
+                                            !differentUserAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity) &&
+                                            differentUserRetryError == 1326 &&
+                                            differentUserCredentials.IsDisposed);
+
+                PasswordCredentials exceptionalCredentials = CreateTestCredentials();
+                PasswordAuthenticator exceptionalAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) => PasswordPromptResult.FromCredentials(exceptionalCredentials),
+                    (credentials, expectedSid) => throw new InvalidOperationException("simulated validation failure"));
+                bool exceptionObserved = false;
+
+                try
+                {
+                    exceptionalAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity);
+                }
+                catch (InvalidOperationException)
+                {
+                    exceptionObserved = true;
+                }
+
+                failures += ExpectCondition("credential secret is disposed when validation throws",
+                                            exceptionObserved && exceptionalCredentials.IsDisposed);
+
+                PasswordCredentials defaultResultCredentials = CreateTestCredentials();
+                PasswordAuthenticator defaultResultAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) => PasswordPromptResult.FromCredentials(defaultResultCredentials),
+                    (credentials, expectedSid) => default(PasswordValidationResult));
+                bool defaultResultFailedClosed = false;
+
+                try
+                {
+                    defaultResultAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity);
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    defaultResultFailedClosed = true;
+                }
+
+                failures += ExpectCondition("uninitialized validation result fails closed",
+                                            defaultResultFailedClosed && defaultResultCredentials.IsDisposed);
+            }
+
+            Console.WriteLine(failures == 0 ? "Password regression tests passed." : string.Format("Password regression tests failed: {0}.", failures));
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static PasswordCredentials CreateTestCredentials()
+        {
+            SecureString password = new SecureString();
+            password.AppendChar('t');
+            password.AppendChar('e');
+            password.AppendChar('s');
+            password.AppendChar('t');
+            password.MakeReadOnly();
+            return new PasswordCredentials("test-user", "test-domain", password);
+        }
+
+        private static int ExpectCondition(string testName, bool condition)
+        {
+            if (!condition)
+            {
+                Console.Error.WriteLine("FAIL: {0}.", testName);
                 return 1;
             }
 

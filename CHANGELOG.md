@@ -13,6 +13,7 @@ https://github.com/pseymour/MakeMeAdmin/commits/master
 ### Security
 
 - Enforced local and remote allow/deny policies at the privileged service boundary before administrator rights are granted.
+- Changed required reauthentication to use a password-only credential prompt, validate the resulting token SID against the current user, and reliably clear credential buffers.
 
 
 ## [2.4.1] - 2025-11-13

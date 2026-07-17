@@ -1,7 +1,7 @@
-﻿// 
+//
 // Copyright © 2010-2025, Sinclair Community College
 // Licensed under the GNU General Public License, version 3.
-// See the LICENSE file in the project root for full license information.  
+// See the LICENSE file in the project root for full license information.
 //
 // This file is part of Make Me Admin.
 //
@@ -18,249 +18,336 @@
 // along with Make Me Admin. If not, see <http://www.gnu.org/licenses/>.
 //
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Runtime.InteropServices;
-
 namespace SinclairCC.MakeMeAdmin
 {
-    internal class NativeMethods
+    using System;
+    using System.ComponentModel;
+    using System.Runtime.InteropServices;
+    using System.Security;
+    using System.Security.Principal;
+    using System.Text;
+
+    internal static class CredentialNativeMethods
     {
-        [DllImport("ole32.dll")]
-        private static extern void CoTaskMemFree(IntPtr ptr);
+        private const int ErrorSuccess = 0;
+        private const int ErrorCancelled = 1223;
+        private const int ErrorInvalidData = 13;
+        private const int Logon32ProviderDefault = 0;
+        private const int Logon32LogonNetwork = 3;
 
-        [DllImport("Kernel32.dll", EntryPoint = "RtlSecureZeroMemory", SetLastError = false)]
-        private static extern void SecureZeroMemory(IntPtr dest, UIntPtr size);
+        private const int CredUiMaxUserNameLength = 513;
+        private const int CredUiMaxDomainLength = 337;
+        private const int CredUiMaxPasswordLength = 256;
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-        private struct CREDUI_INFO
+        [Flags]
+        private enum CredPackFlags
         {
-            /// <summary>
-            /// The size of the struct.
-            /// </summary>
-            public int cbSize;
+            None = 0,
+            GenericCredentials = 0x4
+        }
 
-            /// <summary>
-            /// Specifies the handle to the parent window of the dialog box. The dialog box is modal with respect to the parent window. If this member is NULL, the desktop is the parent window of the dialog box.
-            /// </summary>
-            public IntPtr hwndParent;
+        [Flags]
+        private enum CredUiWindowsFlags
+        {
+            None = 0,
+            Generic = 0x1,
+            EnumerateCurrentUser = 0x200
+        }
 
-            /// <summary>
-            /// Pointer to a string containing a brief message to display in the dialog box. The length of this string should not exceed CREDUI_MAX_MESSAGE_LENGTH.
-            /// </summary>
-            public string pszMessageText;
+        internal const int PasswordPromptFlags = (int)CredUiWindowsFlags.Generic;
 
-            /// <summary>
-            /// Pointer to a string containing the title for the dialog box. The length of this string should not exceed CREDUI_MAX_CAPTION_LENGTH.
-            /// </summary>
-            public string pszCaptionText;
-
-            /// <summary>
-            /// Bitmap to display in the dialog box. If this member is NULL, a default bitmap is used. The bitmap size is limited to 320x60 pixels.
-            /// </summary>
-            public IntPtr hbmBanner;
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct CredUiInfo
+        {
+            internal int cbSize;
+            internal IntPtr hwndParent;
+            internal string pszMessageText;
+            internal string pszCaptionText;
+            internal IntPtr hbmBanner;
         }
 
         [DllImport("credui.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        private static extern bool CredPackAuthenticationBuffer(int dwFlags, string pszUserName, string pszPassword, IntPtr pPackedCredentials, ref int pcbPackedCredentials);
-
-
-        [DllImport("credui.dll", CharSet = CharSet.Auto)]
-        private static extern bool CredUnPackAuthenticationBuffer(int dwFlags,
-                                                                   IntPtr pAuthBuffer,
-                                                                   uint cbAuthBuffer,
-                                                                   StringBuilder pszUserName,
-                                                                   ref int pcchMaxUserName,
-                                                                   StringBuilder pszDomainName,
-                                                                   ref int pcchMaxDomainame,
-                                                                   StringBuilder pszPassword,
-                                                                   ref int pcchMaxPassword);
-
-        [DllImport("credui.dll", CharSet = CharSet.Auto)]
-        private static extern int CredUIPromptForWindowsCredentials(ref CREDUI_INFO notUsedHere,
-                                                                     int authError,
-                                                                     ref uint authPackage,
-                                                                     IntPtr InAuthBuffer,
-                                                                     int InAuthBufferSize,
-                                                                     out IntPtr refOutAuthBuffer,
-                                                                     out uint refOutAuthBufferSize,
-                                                                     ref bool fSave,
-                                                                     int flags);
-
-
-        // Define the Windows LogonUser and CloseHandle functions.
-        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        private static extern bool LogonUser(String username, String domain, IntPtr password, int logonType, int logonProvider, ref IntPtr token);
-
-        /*
-        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool LogonUser(
-            [MarshalAs(UnmanagedType.LPWStr)] string username,
-            [MarshalAs(UnmanagedType.LPWStr)] string domain,
-            [MarshalAs(UnmanagedType.LPWStr)] string password,
-            int logonType,
-            int logonProvider,
-            ref IntPtr token);
-        */
+        private static extern bool CredPackAuthenticationBuffer(CredPackFlags flags,
+                                                                string userName,
+                                                                string password,
+                                                                IntPtr packedCredentials,
+                                                                ref int packedCredentialsSize);
 
-        [DllImport("kernel32.dll", CharSet = CharSet.Auto)]
-        private extern static bool CloseHandle(IntPtr handle);
+        [DllImport("credui.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CredUnPackAuthenticationBuffer(CredPackFlags flags,
+                                                                  IntPtr authBuffer,
+                                                                  uint authBufferSize,
+                                                                  StringBuilder userName,
+                                                                  ref int maxUserName,
+                                                                  StringBuilder domainName,
+                                                                  ref int maxDomainName,
+                                                                  StringBuilder password,
+                                                                  ref int maxPassword);
 
-        // Define the required LogonUser enumerations.
-        private const int LOGON32_PROVIDER_DEFAULT = 0;
+        [DllImport("credui.dll", CharSet = CharSet.Unicode)]
+        private static extern int CredUIPromptForWindowsCredentials(ref CredUiInfo credentialUiInfo,
+                                                                    int authenticationError,
+                                                                    ref uint authenticationPackage,
+                                                                    IntPtr inputAuthBuffer,
+                                                                    int inputAuthBufferSize,
+                                                                    out IntPtr outputAuthBuffer,
+                                                                    out uint outputAuthBufferSize,
+                                                                    ref bool saveCredentials,
+                                                                    CredUiWindowsFlags flags);
 
-        /*
-        private const int LOGON32_LOGON_INTERACTIVE = 2;
-        */
-        private const int LOGON32_LOGON_NETWORK = 3;
-        /*
-        private const int LOGON32_LOGON_BATCH = 4;
-        private const int LOGON32_LOGON_SERVICE = 5;
-        private const int LOGON32_LOGON_UNLOCK = 7;
-        */
+        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool LogonUser(string userName,
+                                             string domain,
+                                             IntPtr password,
+                                             int logonType,
+                                             int logonProvider,
+                                             ref IntPtr token);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CloseHandle(IntPtr handle);
 
-        internal static System.Net.NetworkCredential GetCredentials(IntPtr parentWindow, string userName = null, int errorCode = 0)
+        [DllImport("kernel32.dll", EntryPoint = "RtlSecureZeroMemory")]
+        private static extern IntPtr SecureZeroMemory(IntPtr destination, UIntPtr length);
+
+        /// <summary>
+        /// Displays a conventional username/password dialog that does not enumerate
+        /// Windows Hello credential-provider tiles.
+        /// </summary>
+        internal static PasswordPromptResult PromptForPassword(IntPtr parentWindow, string userName, int errorCode)
         {
-            CREDUI_INFO credui = new CREDUI_INFO();
-            credui.hwndParent = parentWindow;
-            credui.pszCaptionText = Properties.Resources.CredentialsPromptCaption;
-            credui.pszMessageText = Properties.Resources.CredentialsPromptMessage;
-            credui.cbSize = Marshal.SizeOf(credui);
-            uint authPackage = 0;
-            IntPtr outCredBuffer = new IntPtr();
-            uint outCredSize;
-            bool save = false;
-            /*int errorCode = 0;*/
-
-            GetInputBuffer(userName, out var inCredBuffer, out var inCredSize);
-
-            int result = CredUIPromptForWindowsCredentials(ref credui,
-                                                           errorCode,
-                                                           ref authPackage,
-                                                           inCredBuffer,
-                                                           inCredSize,
-                                                           out outCredBuffer,
-                                                           out outCredSize,
-                                                           ref save,
-                                                           0x200);
-
-            if (inCredBuffer != IntPtr.Zero)
+            CredUiInfo credentialUiInfo = new CredUiInfo
             {
-                Marshal.FreeCoTaskMem(inCredBuffer);
-            }
+                hwndParent = parentWindow,
+                pszCaptionText = Properties.Resources.CredentialsPromptCaption,
+                pszMessageText = Properties.Resources.CredentialsPromptMessage,
+                cbSize = Marshal.SizeOf(typeof(CredUiInfo))
+            };
 
-            StringBuilder usernameBuf = new StringBuilder(1);
-            StringBuilder passwordBuf = new StringBuilder(1);
-            StringBuilder domainBuf = new StringBuilder(1);
-            int maxUserName = usernameBuf.Length;
-            int maxPassword = passwordBuf.Length;
-            int maxDomain = domainBuf.Length;
+            IntPtr inputCredentialBuffer = IntPtr.Zero;
+            int inputCredentialSize = 0;
+            IntPtr outputCredentialBuffer = IntPtr.Zero;
+            uint outputCredentialSize = 0;
+            uint authenticationPackage = 0;
+            bool saveCredentials = false;
 
-            if (!CredUnPackAuthenticationBuffer(0, outCredBuffer, outCredSize, usernameBuf, ref maxUserName, domainBuf, ref maxDomain, passwordBuf, ref maxPassword))
+            try
             {
-                usernameBuf = new StringBuilder(maxUserName);
-                passwordBuf = new StringBuilder(maxPassword);
-                domainBuf = new StringBuilder(maxDomain);
-            }
+                CreateInputBuffer(userName, out inputCredentialBuffer, out inputCredentialSize);
 
+                int promptResult = CredUIPromptForWindowsCredentials(ref credentialUiInfo,
+                                                                      errorCode,
+                                                                      ref authenticationPackage,
+                                                                      inputCredentialBuffer,
+                                                                      inputCredentialSize,
+                                                                      out outputCredentialBuffer,
+                                                                      out outputCredentialSize,
+                                                                      ref saveCredentials,
+                                                                      (CredUiWindowsFlags)PasswordPromptFlags);
 
-            if (result == 0)
-            {
-                if (CredUnPackAuthenticationBuffer(0, outCredBuffer, outCredSize, usernameBuf, ref maxUserName,
-                                                   domainBuf, ref maxDomain, passwordBuf, ref maxPassword))
+                if (promptResult == ErrorCancelled)
                 {
-                    Marshal.Copy(new byte[outCredSize], 0, outCredBuffer, (int)outCredSize);
-
-                    // Clear the memory allocated by CredUIPromptForWindowsCredentials.
-                    CoTaskMemFree(outCredBuffer);
-
-                    System.Net.NetworkCredential returnCreds = new System.Net.NetworkCredential()
-                    {
-                        UserName = usernameBuf.ToString(),
-                        Password = passwordBuf.ToString(),
-                        Domain = domainBuf.ToString()
-                    };
-
-                    return returnCreds;
+                    return PasswordPromptResult.Canceled();
                 }
-            }
 
-            return null;
+                if (promptResult != ErrorSuccess)
+                {
+                    return PasswordPromptResult.Error(promptResult);
+                }
+
+                return PasswordPromptResult.FromCredentials(UnpackCredentials(outputCredentialBuffer, outputCredentialSize));
+            }
+            finally
+            {
+                ZeroAndFreeBuffer(inputCredentialBuffer, inputCredentialSize);
+                ZeroAndFreeBuffer(outputCredentialBuffer, outputCredentialSize);
+            }
         }
 
-        // TODO: Change user to string? when moving to C# 8.
-        private static void GetInputBuffer(string user, out IntPtr inCredBuffer, out int inCredSize)
+        /// <summary>
+        /// Validates the password and verifies the resulting token belongs to the
+        /// current caller by comparing SIDs rather than account-name text.
+        /// </summary>
+        internal static PasswordValidationResult ValidateCredentials(PasswordCredentials credentials, SecurityIdentifier expectedUserSid)
         {
-            if (!string.IsNullOrEmpty(user))
+            if ((credentials == null) || (expectedUserSid == null))
             {
-                inCredSize = 1024;
-                inCredBuffer = Marshal.AllocCoTaskMem(inCredSize);
-                if (CredPackAuthenticationBuffer(0, user, pszPassword: "", inCredBuffer, ref inCredSize))
-                {
-                    return;
-                }
+                return PasswordValidationResult.Error(ErrorInvalidData);
             }
-
-            inCredBuffer = IntPtr.Zero;
-            inCredSize = 0;
-        }
-
-
-        internal static int ValidateCredentials(System.Net.NetworkCredential credentials)
-        {
-            if (null == credentials) { return 0x0000000D; }
 
             string userName = credentials.UserName;
             string domain = credentials.Domain;
-            if ((string.IsNullOrEmpty(domain)) && (userName.IndexOf('\\') >= 0))
+
+            if (string.IsNullOrEmpty(domain) && !string.IsNullOrEmpty(userName))
             {
                 int slashIndex = userName.IndexOf('\\');
-                domain = userName.Substring(0, slashIndex);
-                userName = userName.Substring(slashIndex + 1);
+                if (slashIndex >= 0)
+                {
+                    domain = userName.Substring(0, slashIndex);
+                    userName = userName.Substring(slashIndex + 1);
+                }
             }
 
-
+            IntPtr passwordPointer = IntPtr.Zero;
             IntPtr tokenHandle = IntPtr.Zero;
-            IntPtr passwordPtr = IntPtr.Zero;
-            bool returnValue = false;
-            int error = 0;
 
-            // Marshal the SecureString to unmanaged memory.
-            passwordPtr = Marshal.SecureStringToGlobalAllocUnicode(credentials.SecurePassword);
-
-            // Pass LogonUser the unmanaged (and decrypted) copy of the password.
-            returnValue = LogonUser(userName, domain, passwordPtr,
-                                    LOGON32_LOGON_NETWORK, LOGON32_PROVIDER_DEFAULT,
-                                    ref tokenHandle);
-
-            if (!returnValue && tokenHandle == IntPtr.Zero)
+            try
             {
-                error = Marshal.GetLastWin32Error();
+                passwordPointer = Marshal.SecureStringToGlobalAllocUnicode(credentials.Password);
+
+                if (!LogonUser(userName,
+                               string.IsNullOrEmpty(domain) ? null : domain,
+                               passwordPointer,
+                               Logon32LogonNetwork,
+                               Logon32ProviderDefault,
+                               ref tokenHandle))
+                {
+                    return PasswordValidationResult.InvalidCredentials(Marshal.GetLastWin32Error());
+                }
+
+                using (WindowsIdentity validatedIdentity = new WindowsIdentity(tokenHandle))
+                {
+                    if (IdentityMatches(validatedIdentity.User, expectedUserSid))
+                    {
+                        return PasswordValidationResult.Succeeded();
+                    }
+                }
+
+                return PasswordValidationResult.DifferentUser();
+            }
+            finally
+            {
+                if (passwordPointer != IntPtr.Zero)
+                {
+                    Marshal.ZeroFreeGlobalAllocUnicode(passwordPointer);
+                }
+
+                if (tokenHandle != IntPtr.Zero)
+                {
+                    CloseHandle(tokenHandle);
+                }
+            }
+        }
+
+        internal static bool IdentityMatches(SecurityIdentifier validatedUserSid, SecurityIdentifier expectedUserSid)
+        {
+            return (validatedUserSid != null) &&
+                   (expectedUserSid != null) &&
+                   validatedUserSid.Equals(expectedUserSid);
+        }
+
+        private static PasswordCredentials UnpackCredentials(IntPtr credentialBuffer, uint credentialBufferSize)
+        {
+            StringBuilder userName = new StringBuilder(CredUiMaxUserNameLength);
+            StringBuilder domain = new StringBuilder(CredUiMaxDomainLength);
+            StringBuilder password = new StringBuilder(CredUiMaxPasswordLength);
+            int userNameLength = userName.Capacity;
+            int domainLength = domain.Capacity;
+            int passwordLength = password.Capacity;
+            SecureString securePassword = null;
+
+            try
+            {
+                if (!CredUnPackAuthenticationBuffer(CredPackFlags.None,
+                                                    credentialBuffer,
+                                                    credentialBufferSize,
+                                                    userName,
+                                                    ref userNameLength,
+                                                    domain,
+                                                    ref domainLength,
+                                                    password,
+                                                    ref passwordLength))
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error());
+                }
+
+                securePassword = new SecureString();
+                for (int index = 0; index < password.Length; index++)
+                {
+                    securePassword.AppendChar(password[index]);
+                }
+
+                securePassword.MakeReadOnly();
+                PasswordCredentials credentials = new PasswordCredentials(userName.ToString(), domain.ToString(), securePassword);
+                securePassword = null;
+                return credentials;
+            }
+            finally
+            {
+                ClearStringBuilder(password);
+                securePassword?.Dispose();
+            }
+        }
+
+        private static void CreateInputBuffer(string userName, out IntPtr inputCredentialBuffer, out int inputCredentialSize)
+        {
+            inputCredentialBuffer = IntPtr.Zero;
+            inputCredentialSize = 0;
+
+            if (string.IsNullOrEmpty(userName))
+            {
+                return;
             }
 
-            // Perform cleanup whether or not the call succeeded.
-            // Zero-out and free the unmanaged string reference.
-            Marshal.ZeroFreeGlobalAllocUnicode(passwordPtr);
+            CredPackAuthenticationBuffer(CredPackFlags.GenericCredentials,
+                                         userName,
+                                         string.Empty,
+                                         IntPtr.Zero,
+                                         ref inputCredentialSize);
 
-            // Close the token handle.
-            CloseHandle(tokenHandle);
-
-            return error;
-
-            /*
-            // Throw an exception if an error occurred.
-            if (error != 0)
+            if (inputCredentialSize <= 0)
             {
-                throw new System.ComponentModel.Win32Exception(error);
+                throw new Win32Exception(Marshal.GetLastWin32Error());
             }
 
-            return returnValue;
-            */
+            int allocatedCredentialSize = inputCredentialSize;
+            inputCredentialBuffer = Marshal.AllocCoTaskMem(allocatedCredentialSize);
+            int packedCredentialSize = allocatedCredentialSize;
+
+            if (!CredPackAuthenticationBuffer(CredPackFlags.GenericCredentials,
+                                              userName,
+                                              string.Empty,
+                                              inputCredentialBuffer,
+                                              ref packedCredentialSize))
+            {
+                inputCredentialSize = allocatedCredentialSize;
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            inputCredentialSize = allocatedCredentialSize;
+        }
+
+        private static void ZeroAndFreeBuffer(IntPtr buffer, long bufferSize)
+        {
+            if (buffer == IntPtr.Zero)
+            {
+                return;
+            }
+
+            if (bufferSize > 0)
+            {
+                SecureZeroMemory(buffer, new UIntPtr((ulong)bufferSize));
+            }
+
+            Marshal.FreeCoTaskMem(buffer);
+        }
+
+        private static void ClearStringBuilder(StringBuilder value)
+        {
+            if (value == null)
+            {
+                return;
+            }
+
+            for (int index = 0; index < value.Length; index++)
+            {
+                value[index] = '\0';
+            }
+
+            value.Clear();
         }
     }
 }
