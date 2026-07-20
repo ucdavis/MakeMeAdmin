@@ -188,4 +188,22 @@ Ein Grund ist erforderlich, um Administratorrechte zu erhalten, aber Ihr Adminis
   <data name="CredentialsPromptMessage" xml:space="preserve">
     <value>Mit diesen Anmeldedaten wird Ihre Identität bestätigt, bevor administrative Rechte gewährt werden.</value>
   </data>
+  <data name="AuthenticationConfigurationError" xml:space="preserve">
+    <value>Die Authentifizierungseinstellung ist ungültig. Wenden Sie sich an Ihren Administrator.</value>
+  </data>
+  <data name="AuthenticationFailed" xml:space="preserve">
+    <value>Die Authentifizierung war nicht erfolgreich. Administratorrechte wurden nicht angefordert.</value>
+  </data>
+  <data name="AuthenticationInProgress" xml:space="preserve">
+    <value>Identität wird bestätigt...</value>
+  </data>
+  <data name="UsePasswordInstead" xml:space="preserve">
+    <value>Stattdessen Kennwort verwenden</value>
+  </data>
+  <data name="WindowsHelloPromptMessage" xml:space="preserve">
+    <value>Bestätigen Sie Ihre Identität, bevor Administratorrechte gewährt werden.</value>
+  </data>
+  <data name="WindowsHelloUnavailable" xml:space="preserve">
+    <value>Windows Hello ist nicht verfügbar. Administratorrechte wurden nicht angefordert.</value>
+  </data>
 </root>

@@ -86,6 +86,33 @@ namespace SinclairCC.MakeMeAdmin.Properties {
                 return ResourceManager.GetString("CheckingAdminStatus", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized authentication configuration error.
+        /// </summary>
+        public static string AuthenticationConfigurationError {
+            get {
+                return ResourceManager.GetString("AuthenticationConfigurationError", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized authentication failure message.
+        /// </summary>
+        public static string AuthenticationFailed {
+            get {
+                return ResourceManager.GetString("AuthenticationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized authentication progress message.
+        /// </summary>
+        public static string AuthenticationInProgress {
+            get {
+                return ResourceManager.GetString("AuthenticationInProgress", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Enter your credentials..
@@ -276,6 +303,33 @@ namespace SinclairCC.MakeMeAdmin.Properties {
         public static string UIMessageUnauthorized {
             get {
                 return ResourceManager.GetString("UIMessageUnauthorized", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up the localized password fallback control text.
+        /// </summary>
+        public static string UsePasswordInstead {
+            get {
+                return ResourceManager.GetString("UsePasswordInstead", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up the localized Windows Hello prompt message.
+        /// </summary>
+        public static string WindowsHelloPromptMessage {
+            get {
+                return ResourceManager.GetString("WindowsHelloPromptMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized Windows Hello unavailable message.
+        /// </summary>
+        public static string WindowsHelloUnavailable {
+            get {
+                return ResourceManager.GetString("WindowsHelloUnavailable", resourceCulture);
             }
         }
     }

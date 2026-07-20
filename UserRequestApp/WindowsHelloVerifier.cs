@@ -52,6 +52,17 @@ namespace SinclairCC.MakeMeAdmin
         {
             get { return this.Result == WindowsHelloResult.Canceled; }
         }
+
+        internal bool IsUnavailable
+        {
+            get
+            {
+                return this.Result == WindowsHelloResult.DeviceNotPresent ||
+                       this.Result == WindowsHelloResult.NotConfiguredForUser ||
+                       this.Result == WindowsHelloResult.DisabledByPolicy ||
+                       this.Result == WindowsHelloResult.DeviceBusy;
+            }
+        }
     }
 
     /// <summary>

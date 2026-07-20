@@ -62,6 +62,7 @@
     <Compile Include="..\CommonAssemblyInfo.cs">
       <Link>Properties\CommonAssemblyInfo.cs</Link>
     </Compile>
+    <Compile Include="AuthenticationManager.cs" />
     <Compile Include="RequestReasonDialog.cs">
       <SubType>Form</SubType>
     </Compile>

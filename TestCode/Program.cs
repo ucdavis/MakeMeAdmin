@@ -19,6 +19,7 @@
 //
 
 extern alias LocalUI;
+extern alias SettingsLibrary;
 
 namespace SinclairCC.MakeMeAdmin
 {
@@ -27,11 +28,17 @@ namespace SinclairCC.MakeMeAdmin
     using System.Runtime.InteropServices;
     using System.Security;
     using System.Security.Principal;
+    using System.Threading.Tasks;
+    using AppSettings = SettingsLibrary::SinclairCC.MakeMeAdmin.Settings;
+    using AuthenticationManager = LocalUI::SinclairCC.MakeMeAdmin.AuthenticationManager;
+    using AuthenticationOutcome = LocalUI::SinclairCC.MakeMeAdmin.AuthenticationOutcome;
+    using AuthenticationResult = LocalUI::SinclairCC.MakeMeAdmin.AuthenticationResult;
     using CredentialNativeMethods = LocalUI::SinclairCC.MakeMeAdmin.CredentialNativeMethods;
     using PasswordAuthenticator = LocalUI::SinclairCC.MakeMeAdmin.PasswordAuthenticator;
     using PasswordCredentials = LocalUI::SinclairCC.MakeMeAdmin.PasswordCredentials;
     using PasswordPromptResult = LocalUI::SinclairCC.MakeMeAdmin.PasswordPromptResult;
     using PasswordValidationResult = LocalUI::SinclairCC.MakeMeAdmin.PasswordValidationResult;
+    using SubmitRequestForm = LocalUI::SinclairCC.MakeMeAdmin.SubmitRequestForm;
     using WindowsHelloResult = LocalUI::SinclairCC.MakeMeAdmin.WindowsHelloResult;
     using WindowsHelloVerification = LocalUI::SinclairCC.MakeMeAdmin.WindowsHelloVerification;
     using WindowsHelloVerifier = LocalUI::SinclairCC.MakeMeAdmin.WindowsHelloVerifier;
@@ -667,6 +674,11 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
                 return RunWindowsHelloRegressionTests();
             }
 
+            if ((args != null) && (Array.IndexOf(args, "--authentication-regression") >= 0))
+            {
+                return RunAuthenticationRegressionTests();
+            }
+
             Console.WriteLine("Main() starting at {0}.", DateTime.Now);
 
 #if DEBUG
@@ -970,14 +982,14 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
         {
             int failures = 0;
 
-            failures += ExpectWindowsHelloResult(0, WindowsHelloResult.Verified, true, false);
-            failures += ExpectWindowsHelloResult(1, WindowsHelloResult.DeviceNotPresent, false, false);
-            failures += ExpectWindowsHelloResult(2, WindowsHelloResult.NotConfiguredForUser, false, false);
-            failures += ExpectWindowsHelloResult(3, WindowsHelloResult.DisabledByPolicy, false, false);
-            failures += ExpectWindowsHelloResult(4, WindowsHelloResult.DeviceBusy, false, false);
-            failures += ExpectWindowsHelloResult(5, WindowsHelloResult.RetriesExhausted, false, false);
-            failures += ExpectWindowsHelloResult(6, WindowsHelloResult.Canceled, false, true);
-            failures += ExpectWindowsHelloResult(99, WindowsHelloResult.Unknown, false, false);
+            failures += ExpectWindowsHelloResult(0, WindowsHelloResult.Verified, true, false, false);
+            failures += ExpectWindowsHelloResult(1, WindowsHelloResult.DeviceNotPresent, false, false, true);
+            failures += ExpectWindowsHelloResult(2, WindowsHelloResult.NotConfiguredForUser, false, false, true);
+            failures += ExpectWindowsHelloResult(3, WindowsHelloResult.DisabledByPolicy, false, false, true);
+            failures += ExpectWindowsHelloResult(4, WindowsHelloResult.DeviceBusy, false, false, true);
+            failures += ExpectWindowsHelloResult(5, WindowsHelloResult.RetriesExhausted, false, false, false);
+            failures += ExpectWindowsHelloResult(6, WindowsHelloResult.Canceled, false, true, false);
+            failures += ExpectWindowsHelloResult(99, WindowsHelloResult.Unknown, false, false, false);
 
             Console.WriteLine(failures == 0 ? "Windows Hello regression tests passed." : string.Format("Windows Hello regression tests failed: {0}.", failures));
             return failures == 0 ? 0 : 1;
@@ -987,7 +999,8 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
             int nativeValue,
             WindowsHelloResult expectedResult,
             bool expectedVerified,
-            bool expectedCanceled)
+            bool expectedCanceled,
+            bool expectedUnavailable)
         {
             WindowsHelloVerification verification = WindowsHelloVerifier.MapResult(nativeValue);
             return ExpectCondition(
@@ -995,7 +1008,221 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
                 verification.NativeValue == nativeValue &&
                 verification.Result == expectedResult &&
                 verification.IsVerified == expectedVerified &&
-                verification.IsCanceled == expectedCanceled);
+                verification.IsCanceled == expectedCanceled &&
+                verification.IsUnavailable == expectedUnavailable);
+        }
+
+        private static int RunAuthenticationRegressionTests()
+        {
+            int failures = 0;
+
+            failures += ExpectCondition(
+                "policy authentication mode takes precedence",
+                AppSettings.ResolveAuthenticationMode(2, 1, 1, 1) == AuthenticationMode.WindowsHello);
+            failures += ExpectCondition(
+                "preference authentication mode takes precedence over legacy settings",
+                AppSettings.ResolveAuthenticationMode(null, 3, 0, 0) == AuthenticationMode.WindowsHelloWithPasswordFallback);
+            failures += ExpectCondition(
+                "legacy policy enabled maps to password",
+                AppSettings.ResolveAuthenticationMode(null, null, 1, 0) == AuthenticationMode.Password);
+            failures += ExpectCondition(
+                "legacy policy disabled takes precedence over legacy preference",
+                AppSettings.ResolveAuthenticationMode(null, null, 0, 1) == AuthenticationMode.None);
+            failures += ExpectCondition(
+                "legacy preference enabled maps to password",
+                AppSettings.ResolveAuthenticationMode(null, null, null, 1) == AuthenticationMode.Password);
+            failures += ExpectCondition(
+                "missing authentication settings default to none",
+                AppSettings.ResolveAuthenticationMode(null, null, null, null) == AuthenticationMode.None);
+            failures += ExpectInvalidAuthenticationMode("invalid policy mode fails closed", 99, null);
+            failures += ExpectInvalidAuthenticationMode("invalid preference mode fails closed", null, -1);
+            failures += ExpectCondition(
+                "password fallback control is visible only in fallback mode",
+                SubmitRequestForm.PasswordFallbackControlVisible(AuthenticationMode.WindowsHelloWithPasswordFallback) &&
+                !SubmitRequestForm.PasswordFallbackControlVisible(AuthenticationMode.None) &&
+                !SubmitRequestForm.PasswordFallbackControlVisible(AuthenticationMode.Password) &&
+                !SubmitRequestForm.PasswordFallbackControlVisible(AuthenticationMode.WindowsHello));
+
+            using (WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent())
+            {
+                failures += TestAuthenticationDecision(
+                    "none mode succeeds without invoking a verifier",
+                    AuthenticationMode.None,
+                    WindowsHelloResult.Unknown,
+                    false,
+                    AuthenticationOutcome.Succeeded,
+                    0,
+                    0,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "password mode succeeds after password verification",
+                    AuthenticationMode.Password,
+                    WindowsHelloResult.Unknown,
+                    true,
+                    AuthenticationOutcome.Succeeded,
+                    0,
+                    1,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "password cancellation ends the request",
+                    AuthenticationMode.Password,
+                    WindowsHelloResult.Unknown,
+                    false,
+                    AuthenticationOutcome.Canceled,
+                    0,
+                    1,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "Hello verification succeeds without password",
+                    AuthenticationMode.WindowsHello,
+                    WindowsHelloResult.Verified,
+                    false,
+                    AuthenticationOutcome.Succeeded,
+                    1,
+                    0,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "Hello cancellation never falls back to password",
+                    AuthenticationMode.WindowsHelloWithPasswordFallback,
+                    WindowsHelloResult.Canceled,
+                    true,
+                    AuthenticationOutcome.Canceled,
+                    1,
+                    0,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "unavailable Hello automatically falls back to password",
+                    AuthenticationMode.WindowsHelloWithPasswordFallback,
+                    WindowsHelloResult.DeviceNotPresent,
+                    true,
+                    AuthenticationOutcome.Succeeded,
+                    1,
+                    1,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "canceled automatic password fallback ends the request",
+                    AuthenticationMode.WindowsHelloWithPasswordFallback,
+                    WindowsHelloResult.DisabledByPolicy,
+                    false,
+                    AuthenticationOutcome.Canceled,
+                    1,
+                    1,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "unavailable Hello fails closed without fallback mode",
+                    AuthenticationMode.WindowsHello,
+                    WindowsHelloResult.NotConfiguredForUser,
+                    true,
+                    AuthenticationOutcome.Unavailable,
+                    1,
+                    0,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "exhausted Hello retries do not invoke password fallback",
+                    AuthenticationMode.WindowsHelloWithPasswordFallback,
+                    WindowsHelloResult.RetriesExhausted,
+                    true,
+                    AuthenticationOutcome.Failed,
+                    1,
+                    0,
+                    currentIdentity);
+            }
+
+            bool invalidManagerModeFailedClosed = false;
+            try
+            {
+                AuthenticationManager manager = CreateAuthenticationManager(
+                    WindowsHelloResult.Verified,
+                    true,
+                    null,
+                    null);
+                manager.AuthenticateCurrentUserAsync(
+                    (AuthenticationMode)99,
+                    IntPtr.Zero,
+                    null,
+                    "test").GetAwaiter().GetResult();
+            }
+            catch (InvalidOperationException)
+            {
+                invalidManagerModeFailedClosed = true;
+            }
+            failures += ExpectCondition("authentication manager rejects an undefined mode", invalidManagerModeFailedClosed);
+
+            Console.WriteLine(failures == 0 ? "Authentication regression tests passed." : string.Format("Authentication regression tests failed: {0}.", failures));
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static int ExpectInvalidAuthenticationMode(string testName, int? policyMode, int? preferenceMode)
+        {
+            bool failedClosed = false;
+            try
+            {
+                AppSettings.ResolveAuthenticationMode(policyMode, preferenceMode, null, null);
+            }
+            catch (InvalidOperationException)
+            {
+                failedClosed = true;
+            }
+
+            return ExpectCondition(testName, failedClosed);
+        }
+
+        private static int TestAuthenticationDecision(
+            string testName,
+            AuthenticationMode mode,
+            WindowsHelloResult helloResult,
+            bool passwordResult,
+            AuthenticationOutcome expectedOutcome,
+            int expectedHelloCalls,
+            int expectedPasswordCalls,
+            WindowsIdentity currentIdentity)
+        {
+            int helloCalls = 0;
+            int passwordCalls = 0;
+            AuthenticationManager manager = CreateAuthenticationManager(
+                helloResult,
+                passwordResult,
+                () => helloCalls++,
+                () => passwordCalls++);
+
+            AuthenticationResult result = manager.AuthenticateCurrentUserAsync(
+                mode,
+                new IntPtr(1),
+                currentIdentity,
+                "test").GetAwaiter().GetResult();
+
+            return ExpectCondition(
+                testName,
+                result.Outcome == expectedOutcome &&
+                result.Succeeded == (expectedOutcome == AuthenticationOutcome.Succeeded) &&
+                helloCalls == expectedHelloCalls &&
+                passwordCalls == expectedPasswordCalls);
+        }
+
+        private static AuthenticationManager CreateAuthenticationManager(
+            WindowsHelloResult helloResult,
+            bool passwordResult,
+            Action helloCalled,
+            Action passwordCalled)
+        {
+            int nativeValue = helloResult == WindowsHelloResult.Unknown ? 99 : (int)helloResult;
+            return new AuthenticationManager(
+                (owner, message) =>
+                {
+                    if (helloCalled != null)
+                    {
+                        helloCalled();
+                    }
+                    return Task.FromResult(WindowsHelloVerifier.MapResult(nativeValue));
+                },
+                (owner, identity) =>
+                {
+                    if (passwordCalled != null)
+                    {
+                        passwordCalled();
+                    }
+                    return passwordResult;
+                });
         }
 
         private static int TestUnmanagedBufferClearing()

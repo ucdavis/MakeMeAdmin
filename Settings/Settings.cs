@@ -519,6 +519,83 @@ namespace SinclairCC.MakeMeAdmin
             }
         }
 
+        /// <summary>
+        /// Gets or sets the authentication method used before local administrator
+        /// rights are requested. The legacy Boolean setting maps to Password only
+        /// when neither of the new mode settings is configured.
+        /// </summary>
+        public static AuthenticationMode AuthenticationMode
+        {
+            get
+            {
+                int? policyMode = GetDWord(PolicyRegistryKeyPath, null, "Authentication Mode");
+                int? preferenceMode = GetDWord(PreferenceRegistryKeyPath, null, "Authentication Mode");
+                int? policyLegacy = GetDWord(PolicyRegistryKeyPath, null, "Require Authentication For Privileges");
+                int? preferenceLegacy = GetDWord(PreferenceRegistryKeyPath, null, "Require Authentication For Privileges");
+
+                return ResolveAuthenticationMode(policyMode, preferenceMode, policyLegacy, preferenceLegacy);
+            }
+            set
+            {
+                ValidateAuthenticationMode(value);
+                SetDWord(PreferenceRegistryKeyPath, null, "Authentication Mode", (int)value);
+            }
+        }
+
+        /// <summary>
+        /// Resolves authentication configuration in policy-precedence order.
+        /// Kept separate from registry access so all compatibility and invalid-value
+        /// decisions can be covered without modifying machine policy in tests.
+        /// </summary>
+        internal static AuthenticationMode ResolveAuthenticationMode(
+            int? policyMode,
+            int? preferenceMode,
+            int? policyLegacy,
+            int? preferenceLegacy)
+        {
+            if (policyMode.HasValue)
+            {
+                return ParseAuthenticationMode(policyMode.Value);
+            }
+
+            if (preferenceMode.HasValue)
+            {
+                return ParseAuthenticationMode(preferenceMode.Value);
+            }
+
+            if (policyLegacy.HasValue)
+            {
+                return Convert.ToBoolean(policyLegacy.Value)
+                    ? AuthenticationMode.Password
+                    : AuthenticationMode.None;
+            }
+
+            if (preferenceLegacy.HasValue)
+            {
+                return Convert.ToBoolean(preferenceLegacy.Value)
+                    ? AuthenticationMode.Password
+                    : AuthenticationMode.None;
+            }
+
+            return AuthenticationMode.None;
+        }
+
+        private static AuthenticationMode ParseAuthenticationMode(int value)
+        {
+            AuthenticationMode mode = (AuthenticationMode)value;
+            ValidateAuthenticationMode(mode);
+            return mode;
+        }
+
+        private static void ValidateAuthenticationMode(AuthenticationMode mode)
+        {
+            if (!Enum.IsDefined(typeof(AuthenticationMode), mode))
+            {
+                throw new InvalidOperationException(
+                    string.Format("Authentication Mode contains unsupported value {0}.", (int)mode));
+            }
+        }
+
         // TODO: i18n.
         public static bool AllowRemoteRequests
         {
