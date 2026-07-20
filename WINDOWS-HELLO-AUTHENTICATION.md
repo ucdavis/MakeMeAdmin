@@ -70,7 +70,7 @@ New-Item -Path $path -Force | Out-Null
 New-ItemProperty -Path $path -Name 'Authentication Mode' -Value 3 -PropertyType DWord -Force | Out-Null
 ```
 
-For centrally enforced policy, use the policy path instead:
+For an Intune-managed registry policy, use the policy path instead:
 
 ```powershell
 $path = 'HKLM:\SOFTWARE\Policies\Sinclair Community College\Make Me Admin'
@@ -78,18 +78,17 @@ New-Item -Path $path -Force | Out-Null
 New-ItemProperty -Path $path -Name 'Authentication Mode' -Value 3 -PropertyType DWord -Force | Out-Null
 ```
 
-## Group Policy templates
+## Intune Win32 app deployment
 
-Copy `Setup\GroupPolicy\SinclairMakeMeAdmin.admx` into the domain Central Store
-`PolicyDefinitions` folder and copy
-`Setup\GroupPolicy\en-US\SinclairMakeMeAdmin.adml` into its `en-US` subfolder.
-The machine policy appears under **Sinclair Community College > Make Me Admin >
-Authentication Mode**.
+Package the MSI, `Install-MakeMeAdmin.ps1`, and `Uninstall-MakeMeAdmin.ps1` with
+the Microsoft Win32 Content Prep Tool. Use the supplied detection script as a
+custom Intune detection rule. The install wrapper writes the intended settings
+directly to the 64-bit machine registry, so no imported ADMX or Administrative
+Templates profile is required.
 
-The template retains **Require Authentication to Obtain Privileges** for older
-clients. On this client, the new dropdown takes precedence. The new policy text
-also records that window-owned Windows Hello requires Windows 11 build 22000 or
-later. Only the English (United States) language resource is supplied.
+The recommended application setting is `Authentication Mode = 3`. The legacy
+`Require Authentication For Privileges` value is intentionally not written by the
+wrapper because the explicit authentication mode supersedes it.
 
 ## Result and fallback behavior
 

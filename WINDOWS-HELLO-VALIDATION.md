@@ -8,8 +8,8 @@ that must run on a disposable or physically representative endpoint.
 
 ## Completed automated validation
 
-- The ADMX and English ADML parse as XML, and every local string and presentation
-  reference resolves.
+- The Intune install, uninstall, and detection scripts parse successfully and use
+  the 64-bit machine registry explicitly.
 - Debug x64 and Release x64 builds succeeded for the service, local UI, remote UI,
   regression harness, and Danish, German, English, and French MSI packages.
 - Unrestricted Windows Installer ICE validation completed for all eight localized
