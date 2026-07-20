@@ -12,8 +12,11 @@ that must run on a disposable or physically representative endpoint.
   reference resolves.
 - Debug x64 and Release x64 builds succeeded for the service, local UI, remote UI,
   regression harness, and Danish, German, English, and French MSI packages.
-- Unrestricted Windows Installer ICE validation succeeded for all eight localized
-  Debug and Release packages. ICE57 remains the package's intentional suppression.
+- Unrestricted Windows Installer ICE validation completed for all eight localized
+  Debug and Release packages with no validation errors. Each locale reports the
+  existing ICE69 warning for the optional remote shortcut referencing a file in a
+  different component within the same feature. ICE57 remains the package's
+  intentional suppression.
 - All 43 focused regression cases passed in both Debug and Release (86 executions):
   six service authorization, ten password/secret-cleanup, eight native Windows
   Hello result mappings, and nineteen settings/coordinator decisions.
