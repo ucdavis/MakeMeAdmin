@@ -32,10 +32,19 @@ namespace SinclairCC.MakeMeAdmin
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
-        internal static void Main()
+        internal static void Main(string[] arguments)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+
+            if ((arguments != null) &&
+                (arguments.Length == 1) &&
+                string.Equals(arguments[0], "--windows-hello-prototype", StringComparison.OrdinalIgnoreCase))
+            {
+                Application.Run(new WindowsHelloPrototypeForm());
+                return;
+            }
+
             Application.Run(new SubmitRequestForm());
         }
     }

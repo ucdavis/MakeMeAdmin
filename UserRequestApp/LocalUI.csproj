@@ -70,6 +70,10 @@
     </Compile>
     <Compile Include="NativeMethods.cs" />
     <Compile Include="PasswordAuthenticator.cs" />
+    <Compile Include="WindowsHelloVerifier.cs" />
+    <Compile Include="WindowsHelloPrototypeForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="SubmitRequestForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -170,6 +174,9 @@
   <ItemGroup>
     <PackageReference Include="SyslogNet.Client">
       <Version>0.3.3</Version>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Windows.SDK.Contracts">
+      <Version>10.0.22621.3233</Version>
     </PackageReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

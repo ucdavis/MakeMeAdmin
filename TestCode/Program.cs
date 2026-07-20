@@ -32,6 +32,9 @@ namespace SinclairCC.MakeMeAdmin
     using PasswordCredentials = LocalUI::SinclairCC.MakeMeAdmin.PasswordCredentials;
     using PasswordPromptResult = LocalUI::SinclairCC.MakeMeAdmin.PasswordPromptResult;
     using PasswordValidationResult = LocalUI::SinclairCC.MakeMeAdmin.PasswordValidationResult;
+    using WindowsHelloResult = LocalUI::SinclairCC.MakeMeAdmin.WindowsHelloResult;
+    using WindowsHelloVerification = LocalUI::SinclairCC.MakeMeAdmin.WindowsHelloVerification;
+    using WindowsHelloVerifier = LocalUI::SinclairCC.MakeMeAdmin.WindowsHelloVerifier;
 
     /// <summary>
     /// This class defines the main entry point for the application.
@@ -659,6 +662,11 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
                 return RunPasswordRegressionTests();
             }
 
+            if ((args != null) && (Array.IndexOf(args, "--windows-hello-regression") >= 0))
+            {
+                return RunWindowsHelloRegressionTests();
+            }
+
             Console.WriteLine("Main() starting at {0}.", DateTime.Now);
 
 #if DEBUG
@@ -953,6 +961,41 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
             password.AppendChar('t');
             password.MakeReadOnly();
             return new PasswordCredentials("test-user", "test-domain", password);
+        }
+
+        /// <summary>
+        /// Verifies the complete native Windows Hello result mapping without displaying UI.
+        /// </summary>
+        private static int RunWindowsHelloRegressionTests()
+        {
+            int failures = 0;
+
+            failures += ExpectWindowsHelloResult(0, WindowsHelloResult.Verified, true, false);
+            failures += ExpectWindowsHelloResult(1, WindowsHelloResult.DeviceNotPresent, false, false);
+            failures += ExpectWindowsHelloResult(2, WindowsHelloResult.NotConfiguredForUser, false, false);
+            failures += ExpectWindowsHelloResult(3, WindowsHelloResult.DisabledByPolicy, false, false);
+            failures += ExpectWindowsHelloResult(4, WindowsHelloResult.DeviceBusy, false, false);
+            failures += ExpectWindowsHelloResult(5, WindowsHelloResult.RetriesExhausted, false, false);
+            failures += ExpectWindowsHelloResult(6, WindowsHelloResult.Canceled, false, true);
+            failures += ExpectWindowsHelloResult(99, WindowsHelloResult.Unknown, false, false);
+
+            Console.WriteLine(failures == 0 ? "Windows Hello regression tests passed." : string.Format("Windows Hello regression tests failed: {0}.", failures));
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static int ExpectWindowsHelloResult(
+            int nativeValue,
+            WindowsHelloResult expectedResult,
+            bool expectedVerified,
+            bool expectedCanceled)
+        {
+            WindowsHelloVerification verification = WindowsHelloVerifier.MapResult(nativeValue);
+            return ExpectCondition(
+                string.Format("Windows Hello native value {0} maps to {1}", nativeValue, expectedResult),
+                verification.NativeValue == nativeValue &&
+                verification.Result == expectedResult &&
+                verification.IsVerified == expectedVerified &&
+                verification.IsCanceled == expectedCanceled);
         }
 
         private static int TestUnmanagedBufferClearing()
