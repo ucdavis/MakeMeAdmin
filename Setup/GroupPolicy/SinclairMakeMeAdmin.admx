@@ -229,6 +229,41 @@
 			</disabledValue>
 		</policy>
 
+		<policy name="AuthenticationMode"
+				 class="Machine"
+				 displayName="$(string.AuthenticationModeDisplayName)"
+				 explainText="$(string.AuthenticationModeExplainText)"
+				 key="SOFTWARE\Policies\Sinclair Community College\Make Me Admin"
+				 presentation="$(presentation.AuthenticationMode_Presentation)"
+				 valueName="Authentication Mode">
+			<parentCategory ref="makemeadmin:MakeMeAdmin"></parentCategory>
+			<supportedOn ref="windows:SUPPORTED_Windows7" />
+			<elements>
+				<enum id="AuthenticationModeDropDown" valueName="Authentication Mode" required="true">
+					<item displayName="$(string.AuthenticationMode_None)">
+						<value>
+							<decimal value="0" storeAsText="false" />
+						</value>
+					</item>
+					<item displayName="$(string.AuthenticationMode_Password)">
+						<value>
+							<decimal value="1" storeAsText="false" />
+						</value>
+					</item>
+					<item displayName="$(string.AuthenticationMode_WindowsHello)">
+						<value>
+							<decimal value="2" storeAsText="false" />
+						</value>
+					</item>
+					<item displayName="$(string.AuthenticationMode_WindowsHelloWithPasswordFallback)">
+						<value>
+							<decimal value="3" storeAsText="false" />
+						</value>
+					</item>
+				</enum>
+			</elements>
+		</policy>
+
 		<policy name="AllowRemoteRequests"
 				 class="Machine"
 				 displayName="$(string.AllowRemoteRequestsDisplayName)"

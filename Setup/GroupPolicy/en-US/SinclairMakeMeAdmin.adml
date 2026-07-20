@@ -51,7 +51,14 @@
 			<string id="OverrideOutsideProcessExplainText">Specifies whether administrative rights should be added back if an outside process removes them before the timeout has expired.</string>
 
 			<string id="RequireAuthForPrivilegesDisplayName">Require Authentication to Obtain Privileges</string>
-			<string id="RequireAuthForPrivilegesExplainText">Specifies whether the user must authenticate before being granted administrative privileges.</string>
+			<string id="RequireAuthForPrivilegesExplainText">Legacy compatibility setting that requires password authentication before administrative privileges are granted. Authentication Mode takes precedence when both settings are configured.</string>
+
+			<string id="AuthenticationModeDisplayName">Authentication Mode</string>
+			<string id="AuthenticationModeExplainText">Specifies how an authorized local user must confirm their identity before Make Me Admin requests administrator rights. None performs no UI reauthentication. Password uses a password-only prompt and requires the authenticated token SID to match the current user. Windows Hello requires successful PIN, face, or fingerprint verification. Windows Hello with password fallback uses Hello by default, always displays a Use password instead control, and automatically offers password only when Hello is unavailable. Canceling Hello ends the request without fallback. This policy overrides the non-policy Authentication Mode preference and the legacy Require Authentication to Obtain Privileges setting. Undefined values fail closed. Window-owned Windows Hello requires Windows 11 build 22000 or later.</string>
+			<string id="AuthenticationMode_None">None</string>
+			<string id="AuthenticationMode_Password">Password</string>
+			<string id="AuthenticationMode_WindowsHello">Windows Hello</string>
+			<string id="AuthenticationMode_WindowsHelloWithPasswordFallback">Windows Hello with password fallback</string>
 
 			<string id="AllowRemoteRequestsDisplayName">Allow Remote Requests</string>
 			<string id="AllowRemoteRequestsExplainText">Specifies whether administrative rights can be requested by authorized users on a remote computer.</string>
@@ -162,6 +169,10 @@
 			</presentation>
 			<presentation id="PromptForReasonEnum_Presentation">
 				<dropdownList refId="PromptForReasonEnum" noSort="true" defaultItem="0">Prompt the user to provide a reason for obtaining administrator rights.</dropdownList>
+			</presentation>
+			<presentation id="AuthenticationMode_Presentation">
+				<text>Choose how users confirm their identity before administrator rights are requested.</text>
+				<dropdownList refId="AuthenticationModeDropDown" noSort="true" defaultItem="0">Authentication mode:</dropdownList>
 			</presentation>
 			<presentation id="LogElevatedProcesses_Presentation">
 				<text>Choose when to log processes that are executed with elevated permissions.</text>
