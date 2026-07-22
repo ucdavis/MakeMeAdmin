@@ -3,7 +3,7 @@
 These examples are organization-specific and configure:
 
 - `Allowed Entities = Users`
-- `Automatic Add Allowed = lsadmin`
+- `Automatic Add Allowed = local admin account`
 - a 15-minute administrator-rights timeout
 - removal at logout
 - Windows Hello with password fallback (`Authentication Mode = 3`)
