@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 https://github.com/pseymour/MakeMeAdmin/commits/master
 
 
+## [Unreleased]
+
+### Added
+
+- Added configurable Windows Hello reauthentication with password fallback for local administrator-rights requests.
+- Added explicit authentication modes with policy, preference, and legacy-setting precedence.
+- Added Intune Win32 and HTTPS PowerShell deployment examples for the customized build.
+
+### Changed
+
+- Set the customized release version to 2.4.2 so it upgrades the upstream 2.4.1 package.
+- Require a successful reason and reauthentication decision before the UI contacts the privileged service.
+
+### Security
+
+- Enforced local and remote allow/deny policies at the privileged service boundary before administrator rights are granted.
+- Changed required reauthentication to use a password-only credential prompt, validate the resulting token SID against the current user, and reliably clear credential buffers.
+- Removed a credential-buffer cleanup dependency on a Windows entry point that is not exported on every supported system.
+- Documented that Windows Hello verification occurs in the interactive UI and is not cryptographically attested to the LocalSystem service.
+
+
 ## [2.4.1] - 2025-11-13
 
 ### Added

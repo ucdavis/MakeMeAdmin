@@ -20,6 +20,7 @@
 
 using System.Reflection;
 using System.Resources;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 // General Information about an assembly is controlled through the following 
@@ -27,6 +28,7 @@ using System.Runtime.InteropServices;
 // associated with an assembly.
 [assembly: AssemblyTitle("Make Me Admin Process Communication Library")]
 [assembly: AssemblyDescription("")]
+[assembly: InternalsVisibleTo("TestCode")]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
 [assembly: Guid("7695c82b-4f13-4d07-9eb1-8259dbeb1be7")]

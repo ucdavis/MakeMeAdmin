@@ -82,6 +82,11 @@ namespace SinclairCC.MakeMeAdmin
         ElevatedProcess = 101,
 
         /// <summary>
+        /// A request for administrator rights was authorized or denied.
+        /// </summary>
+        AuthorizationRequest = 102,
+
+        /// <summary>
         /// Event ID for debug messages.
         /// </summary>
         DebugMessage = 9000

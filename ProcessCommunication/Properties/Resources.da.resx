@@ -51,6 +51,15 @@
   <data name="RequestSentFromHost" xml:space="preserve">
     <value>Forespørgsel blev sendt fra host {0}.</value>
   </data>
+  <data name="AuthorizationDenied" xml:space="preserve">
+    <value>Anmodningen om administratorrettigheder blev afvist for {0} ({1}).</value>
+  </data>
+  <data name="AuthorizationGranted" xml:space="preserve">
+    <value>Anmodningen om administratorrettigheder blev godkendt for {0} ({1}).</value>
+  </data>
+  <data name="CallerNotAuthorized" xml:space="preserve">
+    <value>Den kaldende bruger har ikke tilladelse til at anmode om administratorrettigheder.</value>
+  </data>
   <data name="UnknownAccount" xml:space="preserve">
     <value>Ukendt Account</value>
   </data>

@@ -63,4 +63,13 @@
   <data name="UserRemovedByOutsideProcess" xml:space="preserve">
     <value>L'utilisateur {0} ({1}) a été retiré du groupe Administrateurs par un processus externe.</value>
   </data>
+  <data name="AuthorizationDenied" xml:space="preserve">
+    <value>La demande de droits d’administrateur a été refusée pour {0} ({1}).</value>
+  </data>
+  <data name="AuthorizationGranted" xml:space="preserve">
+    <value>La demande de droits d’administrateur a été autorisée pour {0} ({1}).</value>
+  </data>
+  <data name="CallerNotAuthorized" xml:space="preserve">
+    <value>L’appelant n’est pas autorisé à demander des droits d’administrateur.</value>
+  </data>
 </root>

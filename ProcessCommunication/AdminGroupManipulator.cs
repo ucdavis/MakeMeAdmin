@@ -22,6 +22,7 @@ namespace SinclairCC.MakeMeAdmin
 {
     using System;
     using System.Collections.Generic;
+    using System.Security;
     using System.Security.Principal;
     using System.ServiceModel;
     using System.ServiceModel.Channels;
@@ -62,12 +63,104 @@ namespace SinclairCC.MakeMeAdmin
                 }
             }
 
+            bool remoteRequest = !string.IsNullOrEmpty(remoteAddress);
+
+            try
+            {
+                DemandCallerIsAuthorized(userIdentity,
+                                         remoteRequest,
+                                         Settings.LocalAllowedEntities,
+                                         Settings.LocalDeniedEntities,
+                                         Settings.RemoteAllowedEntities,
+                                         Settings.RemoteDeniedEntities);
+            }
+            catch (SecurityException)
+            {
+                LogAuthorizationResult(userIdentity, false);
+                throw;
+            }
+            catch (Exception)
+            {
+                LogAuthorizationResult(userIdentity, false);
+                throw new SecurityException(Properties.Resources.CallerNotAuthorized);
+            }
+
+            LogAuthorizationResult(userIdentity, true);
+
+            int timeoutMinutes = GetTimeoutForUser(userIdentity);
+            DateTime expirationTime = DateTime.Now.AddMinutes(timeoutMinutes);
+            LocalAdministratorGroup.AddUser(userIdentity, expirationTime, remoteAddress);
+        }
+
+        /// <summary>
+        /// Throws an exception unless the caller is authorized by every list that
+        /// applies to the request.
+        /// </summary>
+        internal void DemandCallerIsAuthorized(WindowsIdentity userIdentity,
+                                               bool remoteRequest,
+                                               string[] localAllowedEntities,
+                                               string[] localDeniedEntities,
+                                               string[] remoteAllowedEntities,
+                                               string[] remoteDeniedEntities)
+        {
+            if (!UserIsAuthorizedForRequest(userIdentity,
+                                            remoteRequest,
+                                            localAllowedEntities,
+                                            localDeniedEntities,
+                                            remoteAllowedEntities,
+                                            remoteDeniedEntities))
+            {
+                throw new SecurityException(Properties.Resources.CallerNotAuthorized);
+            }
+        }
+
+        /// <summary>
+        /// Determines whether the caller is authorized for a local or remote request.
+        /// </summary>
+        internal bool UserIsAuthorizedForRequest(WindowsIdentity userIdentity,
+                                                 bool remoteRequest,
+                                                 string[] localAllowedEntities,
+                                                 string[] localDeniedEntities,
+                                                 string[] remoteAllowedEntities,
+                                                 string[] remoteDeniedEntities)
+        {
+            bool userIsAuthorized = UserIsAuthorized(userIdentity, localAllowedEntities, localDeniedEntities);
+
+            if (remoteRequest)
+            {
+                userIsAuthorized &= UserIsAuthorized(userIdentity, remoteAllowedEntities, remoteDeniedEntities);
+            }
+
+            return userIsAuthorized;
+        }
+
+        /// <summary>
+        /// Records a generalized authorization result without logging authentication secrets.
+        /// </summary>
+        private static void LogAuthorizationResult(WindowsIdentity userIdentity, bool authorized)
+        {
+            string userSid = Properties.Resources.UnknownAccount;
+            string userName = Properties.Resources.UnknownAccount;
+
             if (userIdentity != null)
             {
-                int timeoutMinutes = GetTimeoutForUser(userIdentity);
-                DateTime expirationTime = DateTime.Now.AddMinutes(timeoutMinutes);
-                LocalAdministratorGroup.AddUser(userIdentity, expirationTime, remoteAddress);
+                if (userIdentity.User != null)
+                {
+                    userSid = userIdentity.User.Value;
+                }
+
+                if (!string.IsNullOrEmpty(userIdentity.Name))
+                {
+                    userName = userIdentity.Name;
+                }
             }
+
+            string message = string.Format(authorized ? Properties.Resources.AuthorizationGranted : Properties.Resources.AuthorizationDenied,
+                                           userSid,
+                                           userName);
+            ApplicationLog.WriteEvent(message,
+                                      EventID.AuthorizationRequest,
+                                      authorized ? System.Diagnostics.EventLogEntryType.Information : System.Diagnostics.EventLogEntryType.Warning);
         }
 
         /// <summary>
@@ -189,9 +282,6 @@ namespace SinclairCC.MakeMeAdmin
                     }
                 }
             }
-#if DEBUG
-            ApplicationLog.WriteEvent("Was not able to find a matching SID.", EventID.DebugMessage, System.Diagnostics.EventLogEntryType.Information);
-#endif
             return false;
         }
 
@@ -224,17 +314,11 @@ namespace SinclairCC.MakeMeAdmin
 
             if (userIdentity == null)
             {
-#if DEBUG
-                ApplicationLog.WriteEvent("User identity is null.", EventID.DebugMessage, System.Diagnostics.EventLogEntryType.Information);
-#endif
                 return false;
             }
 
             if (((deniedSidsList != null) && (deniedSidsList.Length > 0)) && AccountListContainsIdentity(deniedSidsList, userIdentity))
             { // The denied list contains entries. Check the user against that list first.
-#if DEBUG
-                ApplicationLog.WriteEvent("User is denied.", EventID.DebugMessage, System.Diagnostics.EventLogEntryType.Information);
-#endif
                 return false;
             }
 
@@ -263,9 +347,6 @@ namespace SinclairCC.MakeMeAdmin
             }
             else
             { // The allowed list has entries.
-#if DEBUG
-                ApplicationLog.WriteEvent("Made it to the allowed list check. That's good.", EventID.DebugMessage, System.Diagnostics.EventLogEntryType.Information);
-#endif
                 if (AccountListContainsIdentity(allowedSidsList, userIdentity))
                 {
                     return true;

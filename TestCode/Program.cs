@@ -18,9 +18,30 @@
 // along with Make Me Admin. If not, see <http://www.gnu.org/licenses/>.
 //
 
+extern alias LocalUI;
+extern alias SettingsLibrary;
+
 namespace SinclairCC.MakeMeAdmin
 {
     using System;
+    using System.Collections.Generic;
+    using System.Runtime.InteropServices;
+    using System.Security;
+    using System.Security.Principal;
+    using System.Threading.Tasks;
+    using AppSettings = SettingsLibrary::SinclairCC.MakeMeAdmin.Settings;
+    using AuthenticationManager = LocalUI::SinclairCC.MakeMeAdmin.AuthenticationManager;
+    using AuthenticationOutcome = LocalUI::SinclairCC.MakeMeAdmin.AuthenticationOutcome;
+    using AuthenticationResult = LocalUI::SinclairCC.MakeMeAdmin.AuthenticationResult;
+    using CredentialNativeMethods = LocalUI::SinclairCC.MakeMeAdmin.CredentialNativeMethods;
+    using PasswordAuthenticator = LocalUI::SinclairCC.MakeMeAdmin.PasswordAuthenticator;
+    using PasswordCredentials = LocalUI::SinclairCC.MakeMeAdmin.PasswordCredentials;
+    using PasswordPromptResult = LocalUI::SinclairCC.MakeMeAdmin.PasswordPromptResult;
+    using PasswordValidationResult = LocalUI::SinclairCC.MakeMeAdmin.PasswordValidationResult;
+    using SubmitRequestForm = LocalUI::SinclairCC.MakeMeAdmin.SubmitRequestForm;
+    using WindowsHelloResult = LocalUI::SinclairCC.MakeMeAdmin.WindowsHelloResult;
+    using WindowsHelloVerification = LocalUI::SinclairCC.MakeMeAdmin.WindowsHelloVerification;
+    using WindowsHelloVerifier = LocalUI::SinclairCC.MakeMeAdmin.WindowsHelloVerifier;
 
     /// <summary>
     /// This class defines the main entry point for the application.
@@ -636,8 +657,28 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
-        internal static void Main()
+        internal static int Main(string[] args)
         {
+            if ((args != null) && (Array.IndexOf(args, "--authorization-regression") >= 0))
+            {
+                return RunAuthorizationRegressionTests();
+            }
+
+            if ((args != null) && (Array.IndexOf(args, "--password-regression") >= 0))
+            {
+                return RunPasswordRegressionTests();
+            }
+
+            if ((args != null) && (Array.IndexOf(args, "--windows-hello-regression") >= 0))
+            {
+                return RunWindowsHelloRegressionTests();
+            }
+
+            if ((args != null) && (Array.IndexOf(args, "--authentication-regression") >= 0))
+            {
+                return RunAuthenticationRegressionTests();
+            }
+
             Console.WriteLine("Main() starting at {0}.", DateTime.Now);
 
 #if DEBUG
@@ -645,6 +686,585 @@ static long POLICY_EXECUTE    =    (STANDARD_RIGHTS_EXECUTE          |\
             Console.Write("Press <ENTER> to close this program.");
             Console.ReadLine();
 #endif
+            return 0;
+        }
+
+        /// <summary>
+        /// Exercises the same authorization guard used by the privileged service operation
+        /// without modifying policy or local group membership.
+        /// </summary>
+        private static int RunAuthorizationRegressionTests()
+        {
+            int failures = 0;
+            AdminGroupManipulator adminGroupManipulator = new AdminGroupManipulator();
+
+            failures += ExpectAuthorization(adminGroupManipulator,
+                                             "null caller is denied",
+                                             null,
+                                             false,
+                                             null,
+                                             null,
+                                             null,
+                                             null,
+                                             false);
+
+            using (WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent())
+            {
+                if ((currentIdentity == null) || (currentIdentity.User == null))
+                {
+                    Console.Error.WriteLine("FAIL: current Windows identity is unavailable.");
+                    return 1;
+                }
+
+                string[] currentUser = new string[] { currentIdentity.User.Value };
+                string[] noUsers = new string[0];
+
+                failures += ExpectAuthorization(adminGroupManipulator,
+                                                 "null local allow list permits the current caller",
+                                                 currentIdentity,
+                                                 false,
+                                                 null,
+                                                 null,
+                                                 null,
+                                                 null,
+                                                 true);
+                failures += ExpectAuthorization(adminGroupManipulator,
+                                                 "empty local allow list denies the current caller",
+                                                 currentIdentity,
+                                                 false,
+                                                 noUsers,
+                                                 null,
+                                                 null,
+                                                 null,
+                                                 false);
+                failures += ExpectAuthorization(adminGroupManipulator,
+                                                 "local deny list takes precedence",
+                                                 currentIdentity,
+                                                 false,
+                                                 currentUser,
+                                                 currentUser,
+                                                 null,
+                                                 null,
+                                                 false);
+                failures += ExpectAuthorization(adminGroupManipulator,
+                                                 "remote request must pass the remote allow list",
+                                                 currentIdentity,
+                                                 true,
+                                                 currentUser,
+                                                 null,
+                                                 noUsers,
+                                                 null,
+                                                 false);
+                failures += ExpectAuthorization(adminGroupManipulator,
+                                                 "remote request passes both applicable allow lists",
+                                                 currentIdentity,
+                                                 true,
+                                                 currentUser,
+                                                 null,
+                                                 currentUser,
+                                                 null,
+                                                 true);
+            }
+
+            Console.WriteLine(failures == 0 ? "Authorization regression tests passed." : string.Format("Authorization regression tests failed: {0}.", failures));
+            return failures == 0 ? 0 : 1;
+        }
+
+        /// <summary>
+        /// Verifies whether the service authorization guard accepts or rejects a caller.
+        /// </summary>
+        private static int ExpectAuthorization(AdminGroupManipulator adminGroupManipulator,
+                                               string testName,
+                                               WindowsIdentity userIdentity,
+                                               bool remoteRequest,
+                                               string[] localAllowedEntities,
+                                               string[] localDeniedEntities,
+                                               string[] remoteAllowedEntities,
+                                               string[] remoteDeniedEntities,
+                                               bool shouldAuthorize)
+        {
+            try
+            {
+                adminGroupManipulator.DemandCallerIsAuthorized(userIdentity,
+                                                               remoteRequest,
+                                                               localAllowedEntities,
+                                                               localDeniedEntities,
+                                                               remoteAllowedEntities,
+                                                               remoteDeniedEntities);
+
+                if (!shouldAuthorize)
+                {
+                    Console.Error.WriteLine("FAIL: {0}.", testName);
+                    return 1;
+                }
+            }
+            catch (SecurityException)
+            {
+                if (shouldAuthorize)
+                {
+                    Console.Error.WriteLine("FAIL: {0}.", testName);
+                    return 1;
+                }
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine("FAIL: {0}. Unexpected {1}.", testName, exception.GetType().Name);
+                return 1;
+            }
+
+            Console.WriteLine("PASS: {0}.", testName);
+            return 0;
+        }
+
+        /// <summary>
+        /// Exercises password-authentication decisions without displaying a credential
+        /// prompt or validating a real password.
+        /// </summary>
+        private static int RunPasswordRegressionTests()
+        {
+            int failures = 0;
+
+            failures += ExpectCondition("password prompt uses CREDUIWIN_GENERIC only",
+                                        CredentialNativeMethods.PasswordPromptFlags == 0x1);
+            failures += TestUnmanagedBufferClearing();
+
+            using (WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent())
+            {
+                if ((currentIdentity == null) || (currentIdentity.User == null))
+                {
+                    Console.Error.WriteLine("FAIL: current Windows identity is unavailable.");
+                    return 1;
+                }
+
+                SecurityIdentifier differentSid = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
+                failures += ExpectCondition("matching token SID is accepted",
+                                            CredentialNativeMethods.IdentityMatches(currentIdentity.User, currentIdentity.User));
+                failures += ExpectCondition("different token SID is rejected",
+                                            !CredentialNativeMethods.IdentityMatches(differentSid, currentIdentity.User));
+
+                PasswordCredentials successfulCredentials = CreateTestCredentials();
+                SecurityIdentifier observedExpectedSid = null;
+                PasswordAuthenticator successfulAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) => PasswordPromptResult.FromCredentials(successfulCredentials),
+                    (credentials, expectedSid) =>
+                    {
+                        observedExpectedSid = expectedSid;
+                        return PasswordValidationResult.Succeeded();
+                    });
+
+                bool successfulResult = successfulAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity);
+                failures += ExpectCondition("correct password result succeeds for the current SID",
+                                            successfulResult &&
+                                            currentIdentity.User.Equals(observedExpectedSid) &&
+                                            successfulCredentials.IsDisposed);
+
+                PasswordCredentials firstAttemptCredentials = CreateTestCredentials();
+                PasswordCredentials secondAttemptCredentials = CreateTestCredentials();
+                Queue<PasswordCredentials> passwordAttempts = new Queue<PasswordCredentials>();
+                passwordAttempts.Enqueue(firstAttemptCredentials);
+                passwordAttempts.Enqueue(secondAttemptCredentials);
+                List<int> promptErrors = new List<int>();
+                int validationCount = 0;
+                PasswordAuthenticator retryAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) =>
+                    {
+                        promptErrors.Add(error);
+                        return PasswordPromptResult.FromCredentials(passwordAttempts.Dequeue());
+                    },
+                    (credentials, expectedSid) =>
+                    {
+                        validationCount++;
+                        return validationCount == 1
+                            ? PasswordValidationResult.InvalidCredentials(1326)
+                            : PasswordValidationResult.Succeeded();
+                    });
+
+                bool retryResult = retryAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity);
+                failures += ExpectCondition("incorrect password is reported before a successful retry",
+                                            retryResult &&
+                                            promptErrors.Count == 2 &&
+                                            promptErrors[0] == 0 &&
+                                            promptErrors[1] == 1326 &&
+                                            firstAttemptCredentials.IsDisposed &&
+                                            secondAttemptCredentials.IsDisposed);
+
+                bool validatorCalledAfterCancellation = false;
+                PasswordAuthenticator canceledAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) => PasswordPromptResult.Canceled(),
+                    (credentials, expectedSid) =>
+                    {
+                        validatorCalledAfterCancellation = true;
+                        return PasswordValidationResult.Succeeded();
+                    });
+
+                failures += ExpectCondition("cancellation fails closed without validating",
+                                            !canceledAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity) &&
+                                            !validatorCalledAfterCancellation);
+
+                PasswordCredentials differentUserCredentials = CreateTestCredentials();
+                int differentUserPromptCount = 0;
+                int differentUserRetryError = 0;
+                PasswordAuthenticator differentUserAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) =>
+                    {
+                        differentUserPromptCount++;
+                        if (differentUserPromptCount == 1)
+                        {
+                            return PasswordPromptResult.FromCredentials(differentUserCredentials);
+                        }
+
+                        differentUserRetryError = error;
+                        return PasswordPromptResult.Canceled();
+                    },
+                    (credentials, expectedSid) => PasswordValidationResult.DifferentUser());
+
+                failures += ExpectCondition("credentials for another SID are rejected",
+                                            !differentUserAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity) &&
+                                            differentUserRetryError == 1326 &&
+                                            differentUserCredentials.IsDisposed);
+
+                PasswordCredentials exceptionalCredentials = CreateTestCredentials();
+                PasswordAuthenticator exceptionalAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) => PasswordPromptResult.FromCredentials(exceptionalCredentials),
+                    (credentials, expectedSid) => throw new InvalidOperationException("simulated validation failure"));
+                bool exceptionObserved = false;
+
+                try
+                {
+                    exceptionalAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity);
+                }
+                catch (InvalidOperationException)
+                {
+                    exceptionObserved = true;
+                }
+
+                failures += ExpectCondition("credential secret is disposed when validation throws",
+                                            exceptionObserved && exceptionalCredentials.IsDisposed);
+
+                PasswordCredentials defaultResultCredentials = CreateTestCredentials();
+                PasswordAuthenticator defaultResultAuthenticator = new PasswordAuthenticator(
+                    (window, user, error) => PasswordPromptResult.FromCredentials(defaultResultCredentials),
+                    (credentials, expectedSid) => default(PasswordValidationResult));
+                bool defaultResultFailedClosed = false;
+
+                try
+                {
+                    defaultResultAuthenticator.AuthenticateCurrentUser(IntPtr.Zero, currentIdentity);
+                }
+                catch (System.ComponentModel.Win32Exception)
+                {
+                    defaultResultFailedClosed = true;
+                }
+
+                failures += ExpectCondition("uninitialized validation result fails closed",
+                                            defaultResultFailedClosed && defaultResultCredentials.IsDisposed);
+            }
+
+            Console.WriteLine(failures == 0 ? "Password regression tests passed." : string.Format("Password regression tests failed: {0}.", failures));
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static PasswordCredentials CreateTestCredentials()
+        {
+            SecureString password = new SecureString();
+            password.AppendChar('t');
+            password.AppendChar('e');
+            password.AppendChar('s');
+            password.AppendChar('t');
+            password.MakeReadOnly();
+            return new PasswordCredentials("test-user", "test-domain", password);
+        }
+
+        /// <summary>
+        /// Verifies the complete native Windows Hello result mapping without displaying UI.
+        /// </summary>
+        private static int RunWindowsHelloRegressionTests()
+        {
+            int failures = 0;
+
+            failures += ExpectWindowsHelloResult(0, WindowsHelloResult.Verified, true, false, false);
+            failures += ExpectWindowsHelloResult(1, WindowsHelloResult.DeviceNotPresent, false, false, true);
+            failures += ExpectWindowsHelloResult(2, WindowsHelloResult.NotConfiguredForUser, false, false, true);
+            failures += ExpectWindowsHelloResult(3, WindowsHelloResult.DisabledByPolicy, false, false, true);
+            failures += ExpectWindowsHelloResult(4, WindowsHelloResult.DeviceBusy, false, false, true);
+            failures += ExpectWindowsHelloResult(5, WindowsHelloResult.RetriesExhausted, false, false, false);
+            failures += ExpectWindowsHelloResult(6, WindowsHelloResult.Canceled, false, true, false);
+            failures += ExpectWindowsHelloResult(99, WindowsHelloResult.Unknown, false, false, false);
+
+            Console.WriteLine(failures == 0 ? "Windows Hello regression tests passed." : string.Format("Windows Hello regression tests failed: {0}.", failures));
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static int ExpectWindowsHelloResult(
+            int nativeValue,
+            WindowsHelloResult expectedResult,
+            bool expectedVerified,
+            bool expectedCanceled,
+            bool expectedUnavailable)
+        {
+            WindowsHelloVerification verification = WindowsHelloVerifier.MapResult(nativeValue);
+            return ExpectCondition(
+                string.Format("Windows Hello native value {0} maps to {1}", nativeValue, expectedResult),
+                verification.NativeValue == nativeValue &&
+                verification.Result == expectedResult &&
+                verification.IsVerified == expectedVerified &&
+                verification.IsCanceled == expectedCanceled &&
+                verification.IsUnavailable == expectedUnavailable);
+        }
+
+        private static int RunAuthenticationRegressionTests()
+        {
+            int failures = 0;
+
+            failures += ExpectCondition(
+                "policy authentication mode takes precedence",
+                AppSettings.ResolveAuthenticationMode(2, 1, 1, 1) == AuthenticationMode.WindowsHello);
+            failures += ExpectCondition(
+                "preference authentication mode takes precedence over legacy settings",
+                AppSettings.ResolveAuthenticationMode(null, 3, 0, 0) == AuthenticationMode.WindowsHelloWithPasswordFallback);
+            failures += ExpectCondition(
+                "legacy policy enabled maps to password",
+                AppSettings.ResolveAuthenticationMode(null, null, 1, 0) == AuthenticationMode.Password);
+            failures += ExpectCondition(
+                "legacy policy disabled takes precedence over legacy preference",
+                AppSettings.ResolveAuthenticationMode(null, null, 0, 1) == AuthenticationMode.None);
+            failures += ExpectCondition(
+                "legacy preference enabled maps to password",
+                AppSettings.ResolveAuthenticationMode(null, null, null, 1) == AuthenticationMode.Password);
+            failures += ExpectCondition(
+                "missing authentication settings default to none",
+                AppSettings.ResolveAuthenticationMode(null, null, null, null) == AuthenticationMode.None);
+            failures += ExpectInvalidAuthenticationMode("invalid policy mode fails closed", 99, null);
+            failures += ExpectInvalidAuthenticationMode("invalid preference mode fails closed", null, -1);
+            failures += ExpectCondition(
+                "password fallback control is visible only in fallback mode",
+                SubmitRequestForm.PasswordFallbackControlVisible(AuthenticationMode.WindowsHelloWithPasswordFallback) &&
+                !SubmitRequestForm.PasswordFallbackControlVisible(AuthenticationMode.None) &&
+                !SubmitRequestForm.PasswordFallbackControlVisible(AuthenticationMode.Password) &&
+                !SubmitRequestForm.PasswordFallbackControlVisible(AuthenticationMode.WindowsHello));
+
+            using (WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent())
+            {
+                failures += TestAuthenticationDecision(
+                    "none mode succeeds without invoking a verifier",
+                    AuthenticationMode.None,
+                    WindowsHelloResult.Unknown,
+                    false,
+                    AuthenticationOutcome.Succeeded,
+                    0,
+                    0,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "password mode succeeds after password verification",
+                    AuthenticationMode.Password,
+                    WindowsHelloResult.Unknown,
+                    true,
+                    AuthenticationOutcome.Succeeded,
+                    0,
+                    1,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "password cancellation ends the request",
+                    AuthenticationMode.Password,
+                    WindowsHelloResult.Unknown,
+                    false,
+                    AuthenticationOutcome.Canceled,
+                    0,
+                    1,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "Hello verification succeeds without password",
+                    AuthenticationMode.WindowsHello,
+                    WindowsHelloResult.Verified,
+                    false,
+                    AuthenticationOutcome.Succeeded,
+                    1,
+                    0,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "Hello cancellation never falls back to password",
+                    AuthenticationMode.WindowsHelloWithPasswordFallback,
+                    WindowsHelloResult.Canceled,
+                    true,
+                    AuthenticationOutcome.Canceled,
+                    1,
+                    0,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "unavailable Hello automatically falls back to password",
+                    AuthenticationMode.WindowsHelloWithPasswordFallback,
+                    WindowsHelloResult.DeviceNotPresent,
+                    true,
+                    AuthenticationOutcome.Succeeded,
+                    1,
+                    1,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "canceled automatic password fallback ends the request",
+                    AuthenticationMode.WindowsHelloWithPasswordFallback,
+                    WindowsHelloResult.DisabledByPolicy,
+                    false,
+                    AuthenticationOutcome.Canceled,
+                    1,
+                    1,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "unavailable Hello fails closed without fallback mode",
+                    AuthenticationMode.WindowsHello,
+                    WindowsHelloResult.NotConfiguredForUser,
+                    true,
+                    AuthenticationOutcome.Unavailable,
+                    1,
+                    0,
+                    currentIdentity);
+                failures += TestAuthenticationDecision(
+                    "exhausted Hello retries do not invoke password fallback",
+                    AuthenticationMode.WindowsHelloWithPasswordFallback,
+                    WindowsHelloResult.RetriesExhausted,
+                    true,
+                    AuthenticationOutcome.Failed,
+                    1,
+                    0,
+                    currentIdentity);
+            }
+
+            bool invalidManagerModeFailedClosed = false;
+            try
+            {
+                AuthenticationManager manager = CreateAuthenticationManager(
+                    WindowsHelloResult.Verified,
+                    true,
+                    null,
+                    null);
+                manager.AuthenticateCurrentUserAsync(
+                    (AuthenticationMode)99,
+                    IntPtr.Zero,
+                    null,
+                    "test").GetAwaiter().GetResult();
+            }
+            catch (InvalidOperationException)
+            {
+                invalidManagerModeFailedClosed = true;
+            }
+            failures += ExpectCondition("authentication manager rejects an undefined mode", invalidManagerModeFailedClosed);
+
+            Console.WriteLine(failures == 0 ? "Authentication regression tests passed." : string.Format("Authentication regression tests failed: {0}.", failures));
+            return failures == 0 ? 0 : 1;
+        }
+
+        private static int ExpectInvalidAuthenticationMode(string testName, int? policyMode, int? preferenceMode)
+        {
+            bool failedClosed = false;
+            try
+            {
+                AppSettings.ResolveAuthenticationMode(policyMode, preferenceMode, null, null);
+            }
+            catch (InvalidOperationException)
+            {
+                failedClosed = true;
+            }
+
+            return ExpectCondition(testName, failedClosed);
+        }
+
+        private static int TestAuthenticationDecision(
+            string testName,
+            AuthenticationMode mode,
+            WindowsHelloResult helloResult,
+            bool passwordResult,
+            AuthenticationOutcome expectedOutcome,
+            int expectedHelloCalls,
+            int expectedPasswordCalls,
+            WindowsIdentity currentIdentity)
+        {
+            int helloCalls = 0;
+            int passwordCalls = 0;
+            AuthenticationManager manager = CreateAuthenticationManager(
+                helloResult,
+                passwordResult,
+                () => helloCalls++,
+                () => passwordCalls++);
+
+            AuthenticationResult result = manager.AuthenticateCurrentUserAsync(
+                mode,
+                new IntPtr(1),
+                currentIdentity,
+                "test").GetAwaiter().GetResult();
+
+            return ExpectCondition(
+                testName,
+                result.Outcome == expectedOutcome &&
+                result.Succeeded == (expectedOutcome == AuthenticationOutcome.Succeeded) &&
+                helloCalls == expectedHelloCalls &&
+                passwordCalls == expectedPasswordCalls);
+        }
+
+        private static AuthenticationManager CreateAuthenticationManager(
+            WindowsHelloResult helloResult,
+            bool passwordResult,
+            Action helloCalled,
+            Action passwordCalled)
+        {
+            int nativeValue = helloResult == WindowsHelloResult.Unknown ? 99 : (int)helloResult;
+            return new AuthenticationManager(
+                (owner, message) =>
+                {
+                    if (helloCalled != null)
+                    {
+                        helloCalled();
+                    }
+                    return Task.FromResult(WindowsHelloVerifier.MapResult(nativeValue));
+                },
+                (owner, identity) =>
+                {
+                    if (passwordCalled != null)
+                    {
+                        passwordCalled();
+                    }
+                    return passwordResult;
+                });
+        }
+
+        private static int TestUnmanagedBufferClearing()
+        {
+            const int BufferSize = 32;
+            IntPtr buffer = Marshal.AllocCoTaskMem(BufferSize);
+
+            try
+            {
+                for (int index = 0; index < BufferSize; index++)
+                {
+                    Marshal.WriteByte(buffer, index, 0x5a);
+                }
+
+                CredentialNativeMethods.ZeroBuffer(buffer, BufferSize);
+
+                for (int index = 0; index < BufferSize; index++)
+                {
+                    if (Marshal.ReadByte(buffer, index) != 0)
+                    {
+                        return ExpectCondition("unmanaged credential buffer is cleared without a native entry point", false);
+                    }
+                }
+
+                return ExpectCondition("unmanaged credential buffer is cleared without a native entry point", true);
+            }
+            finally
+            {
+                Marshal.FreeCoTaskMem(buffer);
+            }
+        }
+
+        private static int ExpectCondition(string testName, bool condition)
+        {
+            if (!condition)
+            {
+                Console.Error.WriteLine("FAIL: {0}.", testName);
+                return 1;
+            }
+
+            Console.WriteLine("PASS: {0}.", testName);
+            return 0;
         }
 
     }

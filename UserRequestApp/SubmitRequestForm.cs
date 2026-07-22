@@ -61,6 +61,14 @@ namespace SinclairCC.MakeMeAdmin
         /// </summary>
         private System.Timers.Timer notifyIconTimer;
 
+        private readonly AuthenticationManager authenticationManager;
+
+        private readonly Button usePasswordInsteadButton;
+
+        private AuthenticationMode authenticationMode;
+
+        private bool fallbackControlConfigured;
+
 
         /// <summary>
         /// Initializes a new instance of the SubmitRequestForm class.
@@ -68,6 +76,23 @@ namespace SinclairCC.MakeMeAdmin
         public SubmitRequestForm()
         {
             this.InitializeComponent();
+
+            this.authenticationManager = new AuthenticationManager();
+            this.usePasswordInsteadButton = new Button()
+            {
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                Enabled = false,
+                Location = new System.Drawing.Point(
+                    this.removeMeButton.Left,
+                    this.removeMeButton.Bottom + 8),
+                Size = new System.Drawing.Size(this.removeMeButton.Width, 32),
+                TabIndex = 2,
+                Text = Properties.Resources.UsePasswordInstead,
+                UseVisualStyleBackColor = true,
+                Visible = false
+            };
+            this.usePasswordInsteadButton.Click += this.ClickUsePasswordInsteadButton;
+            this.Controls.Add(this.usePasswordInsteadButton);
 
             this.Icon = Properties.Resources.SecurityLock;
             this.notifyIcon.Icon = Properties.Resources.SecurityLock;
@@ -149,61 +174,81 @@ namespace SinclairCC.MakeMeAdmin
         /// <param name="e">
         /// Data specific to this event.
         /// </param>
-        private void ClickSubmitButton(object sender, EventArgs e)
+        private async void ClickSubmitButton(object sender, EventArgs e)
         {
-            if (AuthenticationSuccessful && ReasonDialogSatisfied)
+            await this.AuthenticateAndSubmitAsync(this.authenticationMode);
+        }
+
+        private async void ClickUsePasswordInsteadButton(object sender, EventArgs e)
+        {
+            await this.AuthenticateAndSubmitAsync(AuthenticationMode.Password);
+        }
+
+        private async System.Threading.Tasks.Task AuthenticateAndSubmitAsync(AuthenticationMode mode)
+        {
+            bool addButtonWasEnabled = this.addMeButton.Enabled;
+            bool removeButtonWasEnabled = this.removeMeButton.Enabled;
+            bool passwordButtonWasEnabled = this.usePasswordInsteadButton.Enabled;
+            bool grantStarted = false;
+
+            this.DisableButtons();
+            this.appStatus.Text = Properties.Resources.AuthenticationInProgress;
+
+            try
             {
-                this.DisableButtons();
-                this.appStatus.Text = string.Format(Properties.Resources.UIMessageAddingToGroup, LocalAdministratorGroup.LocalAdminGroupName);
-                addUserBackgroundWorker.RunWorkerAsync();
+                AuthenticationResult result;
+                using (WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent())
+                {
+                    result = await this.authenticationManager.AuthenticateCurrentUserAsync(
+                        mode,
+                        this.Handle,
+                        currentIdentity,
+                        Properties.Resources.WindowsHelloPromptMessage);
+                }
+
+                if (result.Succeeded && this.ReasonDialogSatisfied)
+                {
+                    this.appStatus.Text = string.Format(
+                        Properties.Resources.UIMessageAddingToGroup,
+                        LocalAdministratorGroup.LocalAdminGroupName);
+                    this.addUserBackgroundWorker.RunWorkerAsync();
+                    grantStarted = true;
+                }
+                else if (result.Outcome == AuthenticationOutcome.Unavailable)
+                {
+                    this.ShowAuthenticationMessage(Properties.Resources.WindowsHelloUnavailable);
+                }
+                else if (result.Outcome == AuthenticationOutcome.Failed)
+                {
+                    this.ShowAuthenticationMessage(Properties.Resources.AuthenticationFailed);
+                }
+            }
+            catch (Exception)
+            {
+                this.ShowAuthenticationMessage(Properties.Resources.AuthenticationFailed);
+            }
+            finally
+            {
+                if (!grantStarted)
+                {
+                    this.addMeButton.Enabled = addButtonWasEnabled;
+                    this.removeMeButton.Enabled = removeButtonWasEnabled;
+                    this.usePasswordInsteadButton.Enabled = passwordButtonWasEnabled;
+                    this.appStatus.Text = Properties.Resources.ApplicationIsReady;
+                }
             }
         }
 
-        private bool AuthenticationSuccessful
+        private void ShowAuthenticationMessage(string message)
         {
-            get
-            {
-                bool authenticationSuccessful = true;
-                if (Settings.RequireAuthenticationForPrivileges)
-                {
-                    authenticationSuccessful = false;
-
-                    System.Net.NetworkCredential credentials = null;
-                    int authenticationReturnCode = 0;
-                    WindowsIdentity currentIdentity = WindowsIdentity.GetCurrent();
-                    try
-                    {
-                        do
-                        {
-                            do
-                            {
-                                credentials = NativeMethods.GetCredentials(this.Handle, currentIdentity.Name, authenticationReturnCode);
-                            } while ((null != credentials) && (string.Compare(credentials.UserName, currentIdentity.Name, true) != 0));
-
-                            if (null != credentials)
-                            {
-                                authenticationReturnCode = NativeMethods.ValidateCredentials(credentials);
-                            }
-                        } while ((null != credentials) && (authenticationReturnCode != 0));
-                    }
-                    catch (ArgumentException excep)
-                    {
-                        MessageBox.Show(this, string.Format("{0}: {1}", excep.GetType().Name, excep.Message), Properties.Resources.ApplicationName, MessageBoxButtons.OK, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, 0);
-                    }
-                    catch (System.ComponentModel.Win32Exception excep)
-                    {
-                        MessageBox.Show(this, string.Format("{0}: {1}", excep.GetType().Name, excep.Message), Properties.Resources.ApplicationName, MessageBoxButtons.OK, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, 0);
-                    }
-                    catch (Exception excep)
-                    {
-                        MessageBox.Show(this, string.Format("{0}: {1}", excep.GetType().Name, excep.Message), Properties.Resources.ApplicationName, MessageBoxButtons.OK, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, 0);
-                    }
-
-                    authenticationSuccessful = (null != credentials);
-                    authenticationSuccessful &= (authenticationReturnCode == 0);
-                }
-                return authenticationSuccessful;
-            }
+            MessageBox.Show(
+                this,
+                message,
+                Properties.Resources.ApplicationName,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button1,
+                0);
         }
 
 
@@ -465,6 +510,7 @@ namespace SinclairCC.MakeMeAdmin
         {
             this.addMeButton.Enabled = false;
             this.removeMeButton.Enabled = false;
+            this.usePasswordInsteadButton.Enabled = false;
         }
 
 
@@ -480,8 +526,43 @@ namespace SinclairCC.MakeMeAdmin
         private void FormLoad(object sender, EventArgs e)
         {
             this.DisableButtons();
-            this.appStatus.Text = Properties.Resources.CheckingAdminStatus;
-            buttonStateWorker.RunWorkerAsync();
+
+            try
+            {
+                this.authenticationMode = Settings.AuthenticationMode;
+                this.ConfigureFallbackControl();
+                this.appStatus.Text = Properties.Resources.CheckingAdminStatus;
+                buttonStateWorker.RunWorkerAsync();
+            }
+            catch (Exception)
+            {
+                this.appStatus.Text = Properties.Resources.AuthenticationConfigurationError;
+                this.ShowAuthenticationMessage(Properties.Resources.AuthenticationConfigurationError);
+            }
+        }
+
+        private void ConfigureFallbackControl()
+        {
+            if (this.fallbackControlConfigured)
+            {
+                return;
+            }
+
+            this.fallbackControlConfigured = true;
+            this.usePasswordInsteadButton.Visible =
+                PasswordFallbackControlVisible(this.authenticationMode);
+
+            if (this.usePasswordInsteadButton.Visible)
+            {
+                this.ClientSize = new System.Drawing.Size(
+                    this.ClientSize.Width,
+                    this.ClientSize.Height + this.usePasswordInsteadButton.Height + 13);
+            }
+        }
+
+        internal static bool PasswordFallbackControlVisible(AuthenticationMode mode)
+        {
+            return mode == AuthenticationMode.WindowsHelloWithPasswordFallback;
         }
 
 
@@ -555,6 +636,8 @@ namespace SinclairCC.MakeMeAdmin
             // Enable the "grant admin rights" button, if the user is not already
             // an administrator and is authorized to obtain those rights.
             this.addMeButton.Enabled = !this.userIsAdmin && userIsAuthorizedLocally;
+            this.usePasswordInsteadButton.Enabled =
+                this.usePasswordInsteadButton.Visible && this.addMeButton.Enabled;
             if (addMeButton.Enabled)
             {
                 addMeButton.Text = Properties.Resources.GrantRightsButtonText;

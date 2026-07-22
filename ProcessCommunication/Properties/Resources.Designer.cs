@@ -77,6 +77,33 @@ namespace SinclairCC.MakeMeAdmin.Properties {
                 return ResourceManager.GetString("AddingUserReturnedError", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Administrator-rights request denied for {0} ({1})..
+        /// </summary>
+        internal static string AuthorizationDenied {
+            get {
+                return ResourceManager.GetString("AuthorizationDenied", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Administrator-rights request authorized for {0} ({1})..
+        /// </summary>
+        internal static string AuthorizationGranted {
+            get {
+                return ResourceManager.GetString("AuthorizationGranted", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The caller is not authorized to request administrator rights..
+        /// </summary>
+        internal static string CallerNotAuthorized {
+            get {
+                return ResourceManager.GetString("CallerNotAuthorized", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Exception.

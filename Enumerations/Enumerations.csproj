@@ -46,6 +46,7 @@
     <Compile Include="..\CommonAssemblyInfo.cs">
       <Link>Properties\CommonAssemblyInfo.cs</Link>
     </Compile>
+    <Compile Include="AuthenticationMode.cs" />
     <Compile Include="ElevatedProcessLogging.cs" />
     <Compile Include="EventID.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

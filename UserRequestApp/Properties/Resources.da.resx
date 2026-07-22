@@ -48,4 +48,22 @@
   <data name="UIMessageUnauthorized" xml:space="preserve">
     <value>Du har ikke rettigheder til at bruge denne applikation.</value>
   </data>
+  <data name="AuthenticationConfigurationError" xml:space="preserve">
+    <value>Godkendelsesindstillingen er ugyldig. Kontakt din administrator.</value>
+  </data>
+  <data name="AuthenticationFailed" xml:space="preserve">
+    <value>Godkendelsen lykkedes ikke. Der blev ikke anmodet om administratorrettigheder.</value>
+  </data>
+  <data name="AuthenticationInProgress" xml:space="preserve">
+    <value>Bekræfter din identitet...</value>
+  </data>
+  <data name="UsePasswordInstead" xml:space="preserve">
+    <value>Brug adgangskode i stedet</value>
+  </data>
+  <data name="WindowsHelloPromptMessage" xml:space="preserve">
+    <value>Bekræft din identitet, før du får administratorrettigheder.</value>
+  </data>
+  <data name="WindowsHelloUnavailable" xml:space="preserve">
+    <value>Windows Hello er ikke tilgængelig. Der blev ikke anmodet om administratorrettigheder.</value>
+  </data>
 </root>

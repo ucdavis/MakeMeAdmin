@@ -156,6 +156,15 @@
   <data name="RequestSentFromHost" xml:space="preserve">
     <value>Anfrage gesendet von Host {0}.</value>
   </data>
+  <data name="AuthorizationDenied" xml:space="preserve">
+    <value>Die Anforderung von Administratorrechten für {0} ({1}) wurde abgelehnt.</value>
+  </data>
+  <data name="AuthorizationGranted" xml:space="preserve">
+    <value>Die Anforderung von Administratorrechten für {0} ({1}) wurde autorisiert.</value>
+  </data>
+  <data name="CallerNotAuthorized" xml:space="preserve">
+    <value>Der Aufrufer ist nicht berechtigt, Administratorrechte anzufordern.</value>
+  </data>
   <data name="UnknownAccount" xml:space="preserve">
     <value>Unbekanntes Konto</value>
   </data>

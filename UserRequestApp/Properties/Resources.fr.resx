@@ -57,4 +57,22 @@
   <data name="UIMessageErrorWhileRemoving" xml:space="preserve">
     <value>Une erreur s'est produite lors de votre retrait du groupe Administrateurs.</value>
   </data>
+  <data name="AuthenticationConfigurationError" xml:space="preserve">
+    <value>Le paramètre d'authentification n'est pas valide. Contactez votre administrateur.</value>
+  </data>
+  <data name="AuthenticationFailed" xml:space="preserve">
+    <value>L'authentification a échoué. Les droits d'administrateur n'ont pas été demandés.</value>
+  </data>
+  <data name="AuthenticationInProgress" xml:space="preserve">
+    <value>Confirmation de votre identité...</value>
+  </data>
+  <data name="UsePasswordInstead" xml:space="preserve">
+    <value>Utiliser le mot de passe à la place</value>
+  </data>
+  <data name="WindowsHelloPromptMessage" xml:space="preserve">
+    <value>Confirmez votre identité avant l'octroi des droits d'administrateur.</value>
+  </data>
+  <data name="WindowsHelloUnavailable" xml:space="preserve">
+    <value>Windows Hello n'est pas disponible. Les droits d'administrateur n'ont pas été demandés.</value>
+  </data>
 </root>

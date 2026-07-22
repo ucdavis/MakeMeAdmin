@@ -192,4 +192,22 @@ A reason is required in order to obtain administrator rights, but your administr
   <data name="UIMessageUnauthorized" xml:space="preserve">
     <value>You are not authorized to use this application.</value>
   </data>
+  <data name="AuthenticationConfigurationError" xml:space="preserve">
+    <value>The authentication setting is invalid. Contact your administrator.</value>
+  </data>
+  <data name="AuthenticationFailed" xml:space="preserve">
+    <value>Authentication was not successful. Administrator rights were not requested.</value>
+  </data>
+  <data name="AuthenticationInProgress" xml:space="preserve">
+    <value>Confirming your identity...</value>
+  </data>
+  <data name="UsePasswordInstead" xml:space="preserve">
+    <value>Use password instead</value>
+  </data>
+  <data name="WindowsHelloPromptMessage" xml:space="preserve">
+    <value>Confirm your identity before administrator rights are granted.</value>
+  </data>
+  <data name="WindowsHelloUnavailable" xml:space="preserve">
+    <value>Windows Hello is unavailable. Administrator rights were not requested.</value>
+  </data>
 </root>
