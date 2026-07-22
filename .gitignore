@@ -193,3 +193,7 @@ ModelManifest.xml
 
 # Ignore the Installers folder at the root
 /Installers/
+
+# Generated deployment packages are published as release assets, not source.
+*.msi
+*.intunewin

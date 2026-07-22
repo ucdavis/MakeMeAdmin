@@ -24,8 +24,13 @@ that must run on a disposable or physically representative endpoint.
   `MakeMeAdminService.exe` are packaged. No Windows SDK Contracts or
   `System.Runtime.WindowsRuntime` assembly is packaged; the contracts reference is
   compile-time metadata only.
-- The package retains product version 2.4.1 and UpgradeCode
+- The release-preparation package uses product version 2.4.2 and UpgradeCode
   `{9C690479-3987-48A8-8BDA-118EF1F93CDD}`.
+- A genuinely clean Release build completed without requiring a pre-existing
+  service executable, and the production Phase 3 prototype entry point was removed.
+- The final English Release MSI has ProductCode
+  `{F1870D1C-6440-4695-91B4-964C396E9FFE}` and SHA-256
+  `837577123F0611930977C1FEABC1A6BDB5764238C027B3B901B82239F63BD51D`.
 
 ## Security failure-path review
 
@@ -64,9 +69,8 @@ remain release gates:
 
 - Clean install, service automatic start, repair, and uninstall on a disposable
   Windows 11 VM.
-- Upgrade using the organization's exact previous MSI and deployment command.
-  Because both packages may report version 2.4.1, confirm ProductCode and
-  same-version upgrade behavior explicitly.
+- Upgrade from the upstream 2.4.1 MSI to the customized 2.4.2 MSI using the
+  organization's exact deployment command and detection rules.
 - End-to-end named-pipe denial using an unauthorized local account, plus successful
   grant, configured expiration, removal on logout, and service-stop cleanup.
 - Entra joined, hybrid joined, domain, and local-account coverage required by the

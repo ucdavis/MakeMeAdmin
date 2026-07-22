@@ -5,3 +5,6 @@ You can find documentation in the [wiki](https://github.com/pseymour/MakeMeAdmin
 
 Documentation for the Windows Hello reauthentication extension is in
 [WINDOWS-HELLO-AUTHENTICATION.md](WINDOWS-HELLO-AUTHENTICATION.md).
+
+Organization-specific Intune and HTTPS deployment examples are under
+[Deployment](Deployment).

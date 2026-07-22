@@ -2,7 +2,8 @@
   <Import Project="Sdk.props" Sdk="WixToolset.Sdk" Version="6.0.2" />
   <PropertyGroup>
     <ProductVersion>3.9</ProductVersion>
-    <OutputName>Make Me Admin 2.4.1 $(Platform)</OutputName>
+    <ApplicationVersion>2.4.2</ApplicationVersion>
+    <OutputName>Make Me Admin 2.4.2 $(Platform)</OutputName>
     <IncludeSearchPaths></IncludeSearchPaths>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
@@ -108,24 +109,17 @@
   </ItemGroup>
   <Import Project="Sdk.targets" Sdk="WixToolset.Sdk" Version="6.0.2" />
   <Target Name="BeforeBuild">
-    <!-- Get the assembly version of the service .exe file. -->
-    <GetAssemblyIdentity AssemblyFiles="..\Service\bin\$(Configuration) $(Platform)\MakeMeAdminService.exe">
-      <Output TaskParameter="Assemblies" ItemName="AsmInfo" />
-    </GetAssemblyIdentity>
-    <CreateProperty Value="%(AsmInfo.Version)">
-      <Output TaskParameter="Value" PropertyName="FullVersionNumber" />
-    </CreateProperty>
-    <!-- Create a shortened version number, using the major, minor and build parts. -->
-    <CreateProperty Value="$([System.Text.RegularExpressions.Regex]::Match($(FullVersionNumber), '(\d+)\.(\d+)\.(\d+)'))">
+    <!-- Keep installer naming independent of pre-existing service build output so clean builds work. -->
+    <CreateProperty Value="$(ApplicationVersion)">
       <Output TaskParameter="Value" PropertyName="ShortVersionNumber" />
     </CreateProperty>
     <!-- In debug configuration, name the .msi file after the solution platform, shortened version
-         number, platform and configuration, e.g., MakeMeAdmin-2.4.1-x64 Debug.msi. -->
+         number, platform and configuration, e.g., MakeMeAdmin-2.4.2-x64 Debug.msi. -->
     <CreateProperty Condition=" '$(Configuration)' == 'Debug' " Value="$(SolutionName)-$(ShortVersionNumber)-$(Platform) $(Configuration)">
       <Output TaskParameter="Value" PropertyName="TargetName" />
     </CreateProperty>
     <!-- In non-debug (release) configuration, name the .msi file after the solution platform,
-         shortened version number and platform, e.g., MakeMeAdmin-2.4.1-x64.msi. -->
+         shortened version number and platform, e.g., MakeMeAdmin-2.4.2-x64.msi. -->
     <CreateProperty Condition=" '$(Configuration)' != 'Debug' " Value="$(SolutionName)-$(ShortVersionNumber)-$(Platform)">
       <Output TaskParameter="Value" PropertyName="TargetName" />
     </CreateProperty>

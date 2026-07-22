@@ -1,0 +1,60 @@
+name: Windows build and regressions
+
+on:
+  push:
+    branches: [master, main, feature/windows-hello-reauthentication]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Debug, Release]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Locate MSBuild
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -property installationPath
+          if (-not $installation) { throw 'Visual Studio MSBuild was not found.' }
+          $msbuildDirectory = Join-Path $installation 'MSBuild\Current\Bin'
+          $msbuildDirectory | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Restore packages
+        run: msbuild Setup\Setup.wixproj /t:Restore /p:Configuration=${{ matrix.configuration }} /p:Platform=x64 /m:1
+
+      - name: Build localized MSI packages
+        run: msbuild Setup\Setup.wixproj /t:Build /p:Configuration=${{ matrix.configuration }} /p:Platform=x64 /p:SuppressValidation=true /p:UseSharedCompilation=false /m:1
+
+      - name: Build regression harness
+        run: msbuild TestCode\TestCode.csproj /t:Build /p:Configuration=${{ matrix.configuration }} /p:Platform=x64 /p:UseSharedCompilation=false /m:1
+
+      - name: Run focused regressions
+        shell: pwsh
+        run: |
+          $testExecutable = ".\TestCode\bin\${{ matrix.configuration }} x64\TestCode.exe"
+          $suites = @(
+            '--authorization-regression',
+            '--password-regression',
+            '--windows-hello-regression',
+            '--authentication-regression'
+          )
+          foreach ($suite in $suites) {
+            & $testExecutable $suite
+            if ($LASTEXITCODE -ne 0) { throw "$suite failed with exit code $LASTEXITCODE." }
+          }

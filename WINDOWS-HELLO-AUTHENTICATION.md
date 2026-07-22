@@ -125,10 +125,10 @@ are administrator-managed and are not authored or removed by this feature.
 Uninstall removes the application but does not delete organization policy.
 
 Before broad deployment, validate install, repair, upgrade, and uninstall on a
-disposable Windows 11 VM. Because this development build retains product version
-2.4.1, test the organization's exact upgrade command and detection rules; Windows
-Installer may treat two packages carrying the same product version as the same or
-an ineligible major upgrade depending on their ProductCode.
+disposable Windows 11 VM. The customized package uses product version 2.4.2 so
+Windows Installer can perform a major upgrade from the upstream 2.4.1 release.
+Test the organization's exact upgrade command and detection rules before broad
+deployment.
 
 `WiXCustomAction` is retained for now. It is present in the solution but is not
 referenced by the WiX v4 package, so removing it is a separate cleanup change and

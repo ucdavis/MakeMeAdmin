@@ -72,9 +72,6 @@
     <Compile Include="NativeMethods.cs" />
     <Compile Include="PasswordAuthenticator.cs" />
     <Compile Include="WindowsHelloVerifier.cs" />
-    <Compile Include="WindowsHelloPrototypeForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="SubmitRequestForm.cs">
       <SubType>Form</SubType>
     </Compile>
